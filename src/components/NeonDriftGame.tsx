@@ -12,7 +12,7 @@ import ScreenShake from './ScreenShake'
 import NearMissEffect from './NearMissEffect'
 import StreakCounter from './StreakCounter'
 import LanguageLearning from './LanguageLearning'
-import MysteryBox from './MysteryBox'
+import AnswerBox from './AnswerBox'
 
 // Import all vocabulary chapters
 import { chapter01Words } from '@/vocabulary/chapter01-basic-everyday'
@@ -171,7 +171,7 @@ export default function NeonDriftGame({
   
   const [currentQuestion, setCurrentQuestion] = useState<LanguageWord | null>(null)
   const [isQuestionActive, setIsQuestionActive] = useState(false)
-  const [mysteryBoxes, setMysteryBoxes] = useState<Array<{
+  const [answerBoxes, setAnswerBoxes] = useState<Array<{
     id: string
     x: number
     y: number
@@ -180,6 +180,7 @@ export default function NeonDriftGame({
     lane: 'left' | 'right'
     answer: string
     isCorrect: boolean
+    color: string
   }>>([])
   
   // Question timing
@@ -246,9 +247,26 @@ export default function NeonDriftGame({
     setCurrentQuestion(word)
     setIsQuestionActive(true)
     
-    // Delay mystery box spawn by 2 seconds to give player time to read the question
+    // Delay answer box spawn by 2 seconds to give player time to read the question
     setTimeout(() => {
-      // Spawn mystery boxes regardless of current state (the timeout ensures correct timing)
+      // Generate random colors for the answer boxes with more variety
+      const colors = [
+        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
+        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-orange-500',
+        'bg-cyan-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500',
+        'bg-lime-500', 'bg-amber-500', 'bg-teal-500', 'bg-sky-500'
+      ]
+      
+      // Ensure the two boxes have different colors
+      const leftColor = colors[Math.floor(Math.random() * colors.length)]
+      let rightColor = colors[Math.floor(Math.random() * colors.length)]
+      
+      // Make sure they're different colors
+      while (rightColor === leftColor) {
+        rightColor = colors[Math.floor(Math.random() * colors.length)]
+      }
+      
+      // Spawn answer boxes regardless of current state (the timeout ensures correct timing)
       const leftBox = {
         id: generateId(),
         x: 25, // Left lane position
@@ -257,7 +275,8 @@ export default function NeonDriftGame({
         height: 8,  // Made larger for better visibility
         lane: 'left' as const,
         answer: correctSide === 'left' ? correctAnswer : wrongAnswer,
-        isCorrect: correctSide === 'left'
+        isCorrect: correctSide === 'left',
+        color: leftColor
       }
       
       const rightBox = {
@@ -268,14 +287,15 @@ export default function NeonDriftGame({
         height: 8,  // Made larger for better visibility
         lane: 'right' as const,
         answer: correctSide === 'right' ? correctAnswer : wrongAnswer,
-        isCorrect: correctSide === 'right'
+        isCorrect: correctSide === 'right',
+        color: rightColor
       }
       
       console.log(`Correct side: ${correctSide}`)
-      console.log(`Left box: "${leftBox.answer}" (correct: ${leftBox.isCorrect})`)
-      console.log(`Right box: "${rightBox.answer}" (correct: ${rightBox.isCorrect})`)
+      console.log(`Left box: "${leftBox.answer}" (correct: ${leftBox.isCorrect}) - ${leftBox.color}`)
+      console.log(`Right box: "${rightBox.answer}" (correct: ${rightBox.isCorrect}) - ${rightBox.color}`)
       
-      setMysteryBoxes([leftBox, rightBox])
+      setAnswerBoxes([leftBox, rightBox])
     }, 2000) // 2 second delay
   }, [selectedChapter, speed])
 
@@ -341,9 +361,12 @@ export default function NeonDriftGame({
   // Two-lane system state
   const [currentLane, setCurrentLane] = useState<'left' | 'right'>('left') // Start in left lane
   const [laneChangeKeys, setLaneChangeKeys] = useState<Set<string>>(new Set())
+  
+  // Device orientation for phone tilt controls
+  const [deviceOrientation, setDeviceOrientation] = useState({ gamma: 0 })
 
   // Lane-based collision detection - more reliable for two-lane system
-  const checkMysteryBoxCollision = useCallback((box: {
+  const checkAnswerBoxCollision = useCallback((box: {
     x: number
     y: number
     width: number
@@ -377,19 +400,19 @@ export default function NeonDriftGame({
     return collision
   }, [currentLane])
 
-  // Clean Mystery Box Collision Handler - FIXED VERSION
-  const handleMysteryBoxCollisions = useCallback(() => {
+  // Clean Answer Box Collision Handler - FIXED VERSION
+  const handleAnswerBoxCollisions = useCallback(() => {
     // Safety checks
-    if (!isQuestionActive || mysteryBoxes.length === 0) return
+    if (!isQuestionActive || answerBoxes.length === 0) return
     
-    // Find the mystery box in the current lane
-    const boxInCurrentLane = mysteryBoxes.find(box => box.lane === currentLane)
+    // Find the answer box in the current lane
+    const boxInCurrentLane = answerBoxes.find(box => box.lane === currentLane)
     
     if (!boxInCurrentLane) return
     
     // Check for collision with the box in current lane
-    if (checkMysteryBoxCollision(boxInCurrentLane)) {
-      console.log('🎯 MYSTERY BOX COLLISION DETECTED!')
+    if (checkAnswerBoxCollision(boxInCurrentLane)) {
+      console.log('🎯 ANSWER BOX COLLISION DETECTED!')
       console.log(`Car lane: ${currentLane}, Box lane: ${boxInCurrentLane.lane}`)
       console.log(`Answer: "${boxInCurrentLane.answer}", Is Correct: ${boxInCurrentLane.isCorrect}`)
       
@@ -398,7 +421,7 @@ export default function NeonDriftGame({
       
       // CRITICAL: Immediately prevent any further collisions and clear state
       setIsQuestionActive(false)
-      setMysteryBoxes([])
+      setAnswerBoxes([])
       setCurrentQuestion(null)
       
       // Process the answer immediately (no delay) using the captured result
@@ -470,9 +493,9 @@ export default function NeonDriftGame({
     }
   }, [
     isQuestionActive, 
-    mysteryBoxes, 
+    answerBoxes, 
     currentLane,
-    checkMysteryBoxCollision, 
+    checkAnswerBoxCollision, 
     selectedRound,
     onRoundComplete,
     onGameEnd,
@@ -481,7 +504,7 @@ export default function NeonDriftGame({
     upgradeCarLevel
   ])
 
-  // Handle lane changes for two-lane system
+  // Handle lane changes for two-lane system with device orientation support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase()
@@ -523,16 +546,57 @@ export default function NeonDriftGame({
       setLaneChangeKeys(new Set())
     }
 
+    // Device orientation handler for phone tilt controls
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma !== null) {
+        setDeviceOrientation({ gamma: e.gamma })
+        
+        // Tilt sensitivity: gamma > 15 = right, gamma < -15 = left
+        const tiltThreshold = 15
+        
+        if (e.gamma > tiltThreshold) {
+          setCurrentLane('right')
+          console.log('📱 TILT RIGHT: Moving to RIGHT lane (gamma:', e.gamma.toFixed(1), ')')
+        } else if (e.gamma < -tiltThreshold) {
+          setCurrentLane('left')
+          console.log('📱 TILT LEFT: Moving to LEFT lane (gamma:', e.gamma.toFixed(1), ')')
+        }
+      }
+    }
+
+    // Request permission for device orientation on iOS 13+
+    const requestOrientationPermission = async () => {
+      if (typeof (DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }).requestPermission === 'function') {
+        try {
+          const permission = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission()
+          if (permission === 'granted') {
+            window.addEventListener('deviceorientation', handleDeviceOrientation)
+            console.log('📱 Device orientation permission granted')
+          }
+        } catch {
+          console.log('📱 Device orientation permission denied')
+        }
+      } else {
+        // For non-iOS devices or older iOS versions
+        window.addEventListener('deviceorientation', handleDeviceOrientation)
+        console.log('📱 Device orientation enabled (no permission required)')
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('touchstart', handleTouchStart, { passive: false })
     window.addEventListener('touchend', handleTouchEnd, { passive: false })
+    
+    // Enable device orientation for phone tilt controls
+    requestOrientationPermission()
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('touchstart', handleTouchStart)
       window.removeEventListener('touchend', handleTouchEnd)
+      window.removeEventListener('deviceorientation', handleDeviceOrientation)
     }
   }, [onPause])
 
@@ -680,17 +744,17 @@ export default function NeonDriftGame({
       // Handle collisions
       handleCollisions()
       
-      // Handle mystery box collisions
-      handleMysteryBoxCollisions()
+      // Handle answer box collisions
+      handleAnswerBoxCollisions()
       
-      // Move mystery boxes down
-      setMysteryBoxes(prev => {
+      // Move answer boxes down
+      setAnswerBoxes(prev => {
         const movingBoxes = prev.map(box => ({ ...box, y: box.y + speed }))
         
-        // Check if any mystery boxes reached the bottom (missed)
+        // Check if any answer boxes reached the bottom (missed)
         const reachedBottom = movingBoxes.filter(box => box.y >= 110)
         if (reachedBottom.length > 0 && isQuestionActive) {
-          console.log('⚠️ MYSTERY BOXES MISSED! Player failed to answer.')
+          console.log('⚠️ ANSWER BOXES MISSED! Player failed to answer.')
           
           // Player missed the question - treat as wrong answer
           setIsQuestionActive(false)
@@ -772,7 +836,7 @@ export default function NeonDriftGame({
         cancelAnimationFrame(gameLoopRef.current)
       }
     }
-  }, [spawnObject, handleCollisions, handleMysteryBoxCollisions, generateQuestion, isQuestionActive, speed, setParticles, setPowerups, onLanguageLearning, onSpeedChange, onGameEnd, score])
+  }, [spawnObject, handleCollisions, handleAnswerBoxCollisions, generateQuestion, isQuestionActive, speed, setParticles, setPowerups, onLanguageLearning, onSpeedChange, onGameEnd, score])
 
   return (
     <ScreenShake intensity={shakeIntensity} trigger={shakeTrigger} duration={300}>
@@ -1025,6 +1089,12 @@ export default function NeonDriftGame({
             <div className="text-xs text-gray-400">Steer Right</div>
           </div>
         </div>
+        <div className="flex justify-center mt-2">
+          <div className="bg-black/30 backdrop-blur-lg rounded-lg p-3 text-center">
+            <div className="text-purple-400 text-xs mb-1">📱 TILT PHONE</div>
+            <div className="text-xs text-gray-400">Left/Right to Steer</div>
+          </div>
+        </div>
       </div>
 
       {/* Speed lines */}
@@ -1049,10 +1119,11 @@ export default function NeonDriftGame({
         ))}
       </div>
 
-      {/* Mystery Boxes for Language Learning */}
-      {mysteryBoxes.map(box => (
-        <MysteryBox
+      {/* Answer Boxes for Language Learning */}
+      {answerBoxes.map(box => (
+        <AnswerBox
           key={box.id}
+          id={box.id}
           x={box.x}
           y={box.y}
           width={box.width}
@@ -1060,6 +1131,7 @@ export default function NeonDriftGame({
           isCorrect={box.isCorrect}
           answer={box.answer}
           lane={box.lane}
+          color={box.color}
         />
       ))}
     </div>
@@ -1070,6 +1142,7 @@ export default function NeonDriftGame({
       isQuestionActive={isQuestionActive}
       currentChapter={selectedChapter as keyof typeof vocabularyDatabase}
       playerHealth={health}
+      answerBoxes={answerBoxes}
     />
     
     {/* Upgrade notifications removed - car upgrades happen silently */}
