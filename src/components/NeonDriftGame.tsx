@@ -271,7 +271,6 @@ export default function NeonDriftGame({
         isCorrect: correctSide === 'right'
       }
       
-      console.log('📦 Mystery boxes created:')
       console.log(`Correct side: ${correctSide}`)
       console.log(`Left box: "${leftBox.answer}" (correct: ${leftBox.isCorrect})`)
       console.log(`Right box: "${rightBox.answer}" (correct: ${rightBox.isCorrect})`)
@@ -339,120 +338,6 @@ export default function NeonDriftGame({
     })
   }, [])
 
-  // Clean Health and Score Management System
-  
-  // Handle correct answer - rewards player without health penalty
-  const handleCorrectAnswer = useCallback(() => {
-    console.log('🎉 CORRECT ANSWER! Processing rewards...')
-    console.log('Current health (maintaining):', health)
-    
-    // Calculate score based on multiplier and combo
-    const basePoints = 100
-    const comboBonus = combo * 10 // Extra points for combo
-    const points = Math.floor((basePoints + comboBonus) * multiplier)
-    
-    // Update score and combo
-    setScore(prev => {
-      const newScore = prev + points
-      console.log(`Score increased by ${points} points (new total: ${newScore})`)
-      return newScore
-    })
-    
-    // Track questions answered and check for round completion
-    setQuestionsAnswered(prev => {
-      const newCount = prev + 1
-      
-      // Complete round after answering 10 questions (20 words per round, some words repeat)
-      if (newCount >= 10 && !roundComplete && selectedRound && onRoundComplete) {
-        setRoundComplete(true)
-        // Delay round completion to show success feedback first
-        setTimeout(() => {
-          onRoundComplete(selectedRound)
-        }, 2000)
-      }
-      
-      return newCount
-    })
-
-    setCombo(prev => {
-      const newCombo = prev + 1
-      console.log(`Combo increased to: ${newCombo}`)
-      return newCombo
-    })
-    
-    // Positive feedback
-    soundEngine.play('powerup', 0.8)
-    setShakeIntensity(2) // Gentle shake for success
-    setShakeTrigger(prev => prev + 1)
-    
-    // Upgrade car level for progression
-    upgradeCarLevel()
-    
-    // Create success particles
-    const successParticles = Array.from({ length: 15 }, () => ({
-      id: generateId(),
-      x: playerX + Math.random() * 8,
-      y: 85 + Math.random() * 6
-    }))
-    setParticles(prev => [...prev, ...successParticles])
-    
-    // Reset question state for next round
-    setIsQuestionActive(false)
-    setCurrentQuestion(null)
-    questionTimer.current = Date.now()
-    
-    // Generate next question with success delay
-    setTimeout(() => {
-      generateQuestion()
-    }, 1000)
-    
-    console.log('✅ CORRECT ANSWER PROCESSING COMPLETE - Health maintained!')
-  }, [multiplier, combo, upgradeCarLevel, playerX, generateQuestion, health, onRoundComplete, roundComplete, selectedRound])
-
-  // Handle wrong answer - penalizes player with health loss
-  const handleWrongAnswer = useCallback(() => {
-    console.log('❌ WRONG ANSWER! Processing penalties...')
-    console.log('Current health before penalty:', health)
-    
-    // Reduce health for wrong answer
-    setHealth(prev => {
-      const newHealth = prev - 1
-      console.log(`Health penalty: ${prev} → ${newHealth}`)
-      
-      // Check for game over
-      if (newHealth <= 0) {
-        console.log('💀 GAME OVER! Health depleted!')
-        setTimeout(() => onGameEnd(score), 100)
-        return 0
-      }
-      
-      return newHealth
-    })
-    
-    // Reset combo on wrong answer
-    setCombo(prevCombo => {
-      console.log(`Combo reset from ${prevCombo} to 0`)
-      return 0
-    })
-    
-    // Negative feedback
-    soundEngine.play('crash', 0.6)
-    setShakeIntensity(5) // Strong shake for failure
-    setShakeTrigger(prev => prev + 1)
-    
-    // Reset question state for next round
-    setIsQuestionActive(false)
-    setCurrentQuestion(null)
-    questionTimer.current = Date.now()
-    
-    // Generate next question with penalty delay
-    setTimeout(() => {
-      generateQuestion()
-    }, 1500)
-    
-    console.log('❌ WRONG ANSWER PROCESSING COMPLETE - Health reduced!')
-  }, [onGameEnd, score, generateQuestion, health, combo])
-
   // Two-lane system state
   const [currentLane, setCurrentLane] = useState<'left' | 'right'>('left') // Start in left lane
   const [laneChangeKeys, setLaneChangeKeys] = useState<Set<string>>(new Set())
@@ -492,7 +377,7 @@ export default function NeonDriftGame({
     return collision
   }, [currentLane])
 
-  // Clean Mystery Box Collision Handler - COMPLETELY REBUILT
+  // Clean Mystery Box Collision Handler - FIXED VERSION
   const handleMysteryBoxCollisions = useCallback(() => {
     // Safety checks
     if (!isQuestionActive || mysteryBoxes.length === 0) return
@@ -508,67 +393,80 @@ export default function NeonDriftGame({
       console.log(`Car lane: ${currentLane}, Box lane: ${boxInCurrentLane.lane}`)
       console.log(`Answer: "${boxInCurrentLane.answer}", Is Correct: ${boxInCurrentLane.isCorrect}`)
       
-      // CRITICAL: Immediately prevent any further collisions
+      // CRITICAL: Capture the collision result IMMEDIATELY before any state changes
+      const wasCorrectAnswer = boxInCurrentLane.isCorrect
+      
+      // CRITICAL: Immediately prevent any further collisions and clear state
       setIsQuestionActive(false)
       setMysteryBoxes([])
       setCurrentQuestion(null)
-      questionTimer.current = Date.now() // Set timer to prevent immediate new question
       
-      // Process answer with a delay to ensure state is clean
-      setTimeout(() => {
-        if (boxInCurrentLane.isCorrect) {
-          console.log('✅ PROCESSING CORRECT ANSWER')
+      // Process the answer immediately (no delay) using the captured result
+      if (wasCorrectAnswer) {
+        console.log('✅ PROCESSING CORRECT ANSWER - NO HEALTH LOSS')
+        
+        // CORRECT ANSWER - NO HEALTH LOSS
+        setScore(prev => prev + 100)
+        setCombo(prev => prev + 1)
+        soundEngine.play('success', 0.8)
+        
+        // Add success effects
+        setShakeIntensity(2) // Gentle shake for success
+        setShakeTrigger(prev => prev + 1)
+        
+        // Upgrade car level for progression
+        upgradeCarLevel()
+        
+        // Create success particles
+        const successParticles = Array.from({ length: 15 }, () => ({
+          id: generateId(),
+          x: playerX + Math.random() * 8,
+          y: 85 + Math.random() * 6
+        }))
+        setParticles(prev => [...prev, ...successParticles])
+        
+        // Check for round completion
+        setQuestionsAnswered(prev => {
+          const newCount = prev + 1
+          console.log(`Questions answered: ${newCount}/10`)
           
-          // CORRECT ANSWER - NO HEALTH LOSS
-          setScore(prev => prev + 100)
-          setCombo(prev => prev + 1)
-          soundEngine.play('success', 0.8)
-          
-          // Check for round completion
-          setQuestionsAnswered(prev => {
-            const newCount = prev + 1
-            console.log(`Questions answered: ${newCount}/10`)
-            
-            if (newCount >= 10 && selectedRound && onRoundComplete) {
-              console.log('🎉 ROUND COMPLETE!')
-              setTimeout(() => onRoundComplete(selectedRound), 1000)
-              return newCount
-            }
-            
+          if (newCount >= 10 && selectedRound && onRoundComplete) {
+            console.log('🎉 ROUND COMPLETE!')
+            setRoundComplete(true)
+            setTimeout(() => onRoundComplete(selectedRound), 1000)
             return newCount
-          })
+          }
           
-          // Set timer for next question - reduced delay
-          setTimeout(() => {
-            questionTimer.current = 0 // Allow new question to be generated
-          }, 1250) // 1.25 second delay before allowing new question
+          return newCount
+        })
+        
+      } else {
+        console.log('❌ PROCESSING WRONG ANSWER - REDUCING HEALTH')
+        
+        // WRONG ANSWER - REDUCE HEALTH
+        setHealth(prev => {
+          const newHealth = prev - 1
+          console.log(`Health reduced: ${prev} → ${newHealth}`)
           
-        } else {
-          console.log('❌ PROCESSING WRONG ANSWER')
+          if (newHealth <= 0) {
+            console.log('💀 GAME OVER!')
+            setTimeout(() => onGameEnd(score), 100)
+            return 0
+          }
           
-          // WRONG ANSWER - REDUCE HEALTH
-          setHealth(prev => {
-            const newHealth = prev - 1
-            console.log(`Health reduced: ${prev} → ${newHealth}`)
-            
-            if (newHealth <= 0) {
-              console.log('💀 GAME OVER!')
-              setTimeout(() => onGameEnd(score), 100)
-              return 0
-            }
-            
-            return newHealth
-          })
-          
-          setCombo(0)
-          soundEngine.play('crash', 0.6)
-          
-          // Set timer for next question - reduced delay for wrong answer
-          setTimeout(() => {
-            questionTimer.current = 0 // Allow new question to be generated
-          }, 1750) // 1.75 second delay before allowing new question
-        }
-      }, 200) // Increased delay to ensure clean state
+          return newHealth
+        })
+        
+        setCombo(0)
+        soundEngine.play('crash', 0.6)
+        
+        // Add failure effects
+        setShakeIntensity(5) // Strong shake for failure
+        setShakeTrigger(prev => prev + 1)
+      }
+      
+      // Set timer for next question with appropriate delay
+      questionTimer.current = Date.now()
     }
   }, [
     isQuestionActive, 
@@ -578,7 +476,9 @@ export default function NeonDriftGame({
     selectedRound,
     onRoundComplete,
     onGameEnd,
-    score
+    score,
+    playerX,
+    upgradeCarLevel
   ])
 
   // Handle lane changes for two-lane system
@@ -816,6 +716,10 @@ export default function NeonDriftGame({
             setCombo(0)
             soundEngine.play('crash', 0.6)
             
+            // Add failure effects for missed question
+            setShakeIntensity(5)
+            setShakeTrigger(prev => prev + 1)
+            
             // Set timer for next question - reduced delay for missed question
             setTimeout(() => {
               questionTimer.current = 0 // Allow new question to be generated
@@ -827,16 +731,14 @@ export default function NeonDriftGame({
         return movingBoxes.filter(box => box.y < 110)
       })
       
-      // Only generate the first question automatically with proper delay
+      // Only generate new questions with proper timing control
       if (!isQuestionActive && questionTimer.current === 0) {
+        // Generate first question immediately
         generateQuestion()
-      }
-      
-      // Add minimum delay between questions - prevent rapid switching
-      if (!isQuestionActive && questionTimer.current > 0) {
+      } else if (!isQuestionActive && questionTimer.current > 0) {
         const timeSinceLastQuestion = Date.now() - questionTimer.current
-        // Wait at least 1.5 seconds before generating new question
-        if (timeSinceLastQuestion >= 1500) {
+        // Wait at least 2 seconds between questions to prevent conflicts
+        if (timeSinceLastQuestion >= 2000) {
           questionTimer.current = 0 // Reset timer to allow new question
         }
       }
