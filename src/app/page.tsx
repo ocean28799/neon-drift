@@ -554,6 +554,7 @@ export default function Home() {
           isQuestionActive={false}
           currentChapter="basics"
           playerHealth={100}
+          answerBoxes={[]}
         />
       )}
     </div>
