@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Globe } from 'lucide-react'
 
@@ -19,6 +18,7 @@ interface LanguageWord {
 
 interface LanguageLearningProps {
   currentQuestion: LanguageWord | null
+  questionType: 'translate' | 'reverse'
   isQuestionActive: boolean
   currentChapter: string
   playerHealth: number
@@ -37,20 +37,10 @@ interface LanguageLearningProps {
 
 export default function LanguageLearning({ 
   currentQuestion,
+  questionType,
   isQuestionActive,
   answerBoxes
 }: LanguageLearningProps) {
-  const [questionType, setQuestionType] = useState<'translate' | 'reverse'>('translate')
-
-  // Generate question data when currentQuestion changes
-  useEffect(() => {
-    if (currentQuestion) {
-      // Focus on learning English - show Vietnamese and ask for English (most common)
-      const questionTypes: ('translate' | 'reverse')[] = ['translate', 'translate', 'reverse'] // 2/3 chance Vietnamese→English
-      const type = questionTypes[Math.floor(Math.random() * questionTypes.length)]
-      setQuestionType(type)
-    }
-  }, [currentQuestion])
 
   if (!isQuestionActive || !currentQuestion) return null
 
@@ -99,11 +89,30 @@ export default function LanguageLearning({
           <div className="text-center">
             <div className="text-blue-100 text-xs font-bold mb-1">LEFT ROAD</div>
             <div className="text-white text-sm font-bold">
-              {leftBox?.answer || 'Loading...'}
+              {leftBox?.answer || (
+                <motion.div
+                  className="flex items-center justify-center gap-1"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <motion.div
+                    className="w-1 h-3 bg-blue-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0 }}
+                  />
+                  <motion.div
+                    className="w-1 h-3 bg-blue-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0.2 }}
+                  />
+                  <motion.div
+                    className="w-1 h-3 bg-blue-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0.4 }}
+                  />
+                </motion.div>
+              )}
             </div>
-            {leftBox?.isCorrect && (
-              <div className="text-green-300 text-xs mt-1">✨ Correct Answer!</div>
-            )}
           </div>
         </motion.div>
 
@@ -117,11 +126,30 @@ export default function LanguageLearning({
           <div className="text-center">
             <div className="text-orange-100 text-xs font-bold mb-1">RIGHT ROAD</div>
             <div className="text-white text-sm font-bold">
-              {rightBox?.answer || 'Loading...'}
+              {rightBox?.answer || (
+                <motion.div
+                  className="flex items-center justify-center gap-1"
+                  animate={{ opacity: [0.5, 1, 0.5] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  <motion.div
+                    className="w-1 h-3 bg-orange-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0 }}
+                  />
+                  <motion.div
+                    className="w-1 h-3 bg-orange-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0.2 }}
+                  />
+                  <motion.div
+                    className="w-1 h-3 bg-orange-300 rounded-full"
+                    animate={{ scaleY: [1, 1.5, 1] }}
+                    transition={{ duration: 0.8, repeat: Infinity, delay: 0.4 }}
+                  />
+                </motion.div>
+              )}
             </div>
-            {rightBox?.isCorrect && (
-              <div className="text-green-300 text-xs mt-1">✨ Correct Answer!</div>
-            )}
           </div>
         </motion.div>
       </div>

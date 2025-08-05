@@ -153,7 +153,7 @@ export default function NeonDriftGame({
   const [playerX, setPlayerX] = useState(50) // percentage
   const [gameObjects, setGameObjects] = useState<GameObject[]>([])
   const [score, setScore] = useState(0)
-  const [speed, setSpeed] = useState(2)
+  const [speed, setSpeed] = useState(1) // Reduced from 2 to 1
   const [health, setHealth] = useState(3) // New health system
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const [roundComplete, setRoundComplete] = useState(false)
@@ -170,6 +170,7 @@ export default function NeonDriftGame({
   })
   
   const [currentQuestion, setCurrentQuestion] = useState<LanguageWord | null>(null)
+  const [questionType, setQuestionType] = useState<'translate' | 'reverse'>('translate')
   const [isQuestionActive, setIsQuestionActive] = useState(false)
   const [answerBoxes, setAnswerBoxes] = useState<Array<{
     id: string
@@ -232,16 +233,17 @@ export default function NeonDriftGame({
     
     const word = availableWords[Math.floor(Math.random() * availableWords.length)]
     
-    // Focus on learning English - show Vietnamese and ask for English (most common)
-    const questionTypes: ('translate' | 'reverse')[] = ['translate', 'translate', 'reverse'] // 2/3 chance Vietnamese→English
-    const type = questionTypes[Math.floor(Math.random() * questionTypes.length)]
+    // Always Vietnamese → English (translate mode only)
+    const type = 'translate' // Fixed to always be translate (Vietnamese question, English answer)
+    
+    setQuestionType(type) // Set the question type state
     
     // Get wrong answer from same category
     const wrongAnswers = vocabulary.filter(w => w.id !== word.id && w.category === word.category)
     const wrongWord = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)] || vocabulary[0]
     
-    const correctAnswer = type === 'translate' ? word.english : word.vietnamese
-    const wrongAnswer = type === 'translate' ? wrongWord.english : wrongWord.vietnamese
+    const correctAnswer = word.english // Always English answer
+    const wrongAnswer = wrongWord.english // Always English wrong answer
     const correctSide: 'left' | 'right' = Math.random() > 0.5 ? 'left' : 'right'
     
     setCurrentQuestion(word)
@@ -304,7 +306,7 @@ export default function NeonDriftGame({
     setCarLevel(prev => {
       const newLevel = prev + 1
       
-      // Apply upgrades based on level
+      // Apply upgrades based on level - now upgrades every 2 levels
       setCarUpgrades(prevUpgrades => {
         const newUpgrades = { ...prevUpgrades }
         
@@ -313,41 +315,36 @@ export default function NeonDriftGame({
             // Level 2: Speed boost
             newUpgrades.speed = 1.2
             break
-          case 3:
-            // Level 3: Better handling + wings
+          case 4:
+            // Level 4: Better handling + wings
             newUpgrades.handling = 1.3
             newUpgrades.wings = true
             break
-          case 4:
-            // Level 4: Smaller size (harder to hit)
-            newUpgrades.size = 0.8
-            break
-          case 5:
-            // Level 5: Speed boost upgrade
-            newUpgrades.speed = 1.5
-            newUpgrades.boost = true
-            break
           case 6:
-            // Level 6: Shield upgrade
-            newUpgrades.shield = true
-            break
-          case 7:
-            // Level 7: Maximum speed
-            newUpgrades.speed = 2.0
+            // Level 6: Smaller size (harder to hit) + speed boost
+            newUpgrades.size = 0.8
+            newUpgrades.speed = 1.5
             break
           case 8:
-            // Level 8: Ultra compact
-            newUpgrades.size = 0.6
-            break
-          case 9:
-            // Level 9: Enhanced handling
-            newUpgrades.handling = 1.8
+            // Level 8: God mode begins + boost + shield
+            newUpgrades.boost = true
+            newUpgrades.shield = true
+            newUpgrades.speed = 2.0
             break
           case 10:
-            // Level 10: God mode
+            // Level 10: Ultra compact
+            newUpgrades.size = 0.6
+            newUpgrades.handling = 1.8
+            break
+          case 12:
+            // Level 12: Enhanced handling
+            newUpgrades.handling = 2.0
+            break
+          case 14:
+            // Level 14: Ultimate god mode
             newUpgrades.speed = 2.5
             newUpgrades.size = 0.5
-            newUpgrades.handling = 2.0
+            newUpgrades.handling = 2.5
             break
         }
         
@@ -840,7 +837,18 @@ export default function NeonDriftGame({
 
   return (
     <ScreenShake intensity={shakeIntensity} trigger={shakeTrigger} duration={300}>
-      <div ref={gameAreaRef} className="relative w-full h-screen overflow-hidden bg-gradient-to-b from-purple-900 via-blue-900 to-black">
+      <div 
+        ref={gameAreaRef} 
+        className={`relative w-full h-screen overflow-hidden transition-all duration-1000 ${
+          carLevel >= 12 ? 'bg-gradient-to-b from-black via-gray-900 to-black' :
+          carLevel >= 10 ? 'bg-gradient-to-b from-gray-900 via-black to-gray-900' :
+          carLevel >= 8 ? 'bg-gradient-to-b from-purple-950 via-black to-purple-950' :
+          carLevel >= 6 ? 'bg-gradient-to-b from-purple-900 via-gray-900 to-black' :
+          carLevel >= 4 ? 'bg-gradient-to-b from-purple-900 via-blue-900 to-gray-900' :
+          carLevel >= 2 ? 'bg-gradient-to-b from-purple-900 via-blue-900 to-black' :
+          'bg-gradient-to-b from-purple-900 via-blue-900 to-black'
+        }`}
+      >
         {/* Moving background grid */}
         <div className="absolute inset-0">
           <div 
@@ -940,28 +948,46 @@ export default function NeonDriftGame({
           top: '85%',
           width: `${6 * carUpgrades.size}%`,
           height: `${10 * carUpgrades.size}%`,
-          transform: carLevel > 3 ? 'scale(1.1)' : 'scale(1)',
+          transform: carLevel > 4 ? 'scale(1.1)' : 'scale(1)',
+          filter: carLevel >= 8 ? `brightness(${1.2 + (carLevel - 8) * 0.1}) contrast(${1.1 + (carLevel - 8) * 0.05})` : 'none'
         }}
         animate={{
           y: carUpgrades.boost ? [0, -2, 0] : 0,
+          boxShadow: carLevel >= 8 ? [
+            `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`,
+            `0 0 ${30 + carLevel * 3}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`,
+            `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`
+          ] : undefined
         }}
         transition={{
           duration: carUpgrades.boost ? 0.3 : 1,
           repeat: Infinity,
+          boxShadow: { duration: 2, repeat: Infinity }
         }}
       >
         {/* Main Car Body */}
         <div className={`relative w-full h-full bg-gradient-to-b ${selectedCar.gradient} shadow-2xl ${
           powerups.shield > 0 || carUpgrades.shield ? 'shadow-blue-500/75' : `shadow-${selectedCar.color}-500/50`
-        } ${carLevel > 5 ? 'border border-yellow-400/60' : ''}`}
+        } ${carLevel >= 6 ? 'border border-white/60' : carLevel >= 4 ? 'border border-cyan-400/60' : carLevel >= 2 ? 'border border-yellow-400/60' : ''} 
+        transition-all duration-700`}
           style={{
             clipPath: 'polygon(20% 0%, 80% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)', // Sports car silhouette
             borderRadius: '12px 12px 6px 6px',
             boxShadow: powerups.shield > 0 || carUpgrades.shield
               ? '0 0 20px #3b82f6, inset 0 2px 4px rgba(255,255,255,0.2)'
-              : carLevel > 7
-              ? '0 0 20px #fbbf24, inset 0 2px 4px rgba(255,255,255,0.2)'
-              : `0 0 15px ${selectedCar.color === 'cyan' ? '#06b6d4' : selectedCar.color === 'purple' ? '#8b5cf6' : selectedCar.color === 'yellow' ? '#f59e0b' : selectedCar.color === 'blue' ? '#3b82f6' : selectedCar.color === 'red' ? '#ef4444' : '#374151'}, inset 0 2px 4px rgba(255,255,255,0.2)`
+              : carLevel >= 8
+              ? `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.8), inset 0 2px 4px rgba(255,255,255,0.${Math.min(8, carLevel - 6)})`
+              : carLevel >= 6
+              ? `0 0 ${15 + carLevel * 2}px rgba(255, 255, 255, 0.6), inset 0 2px 4px rgba(255,255,255,0.4)`
+              : carLevel >= 4
+              ? `0 0 ${10 + carLevel * 2}px rgba(255, 255, 255, 0.4), inset 0 2px 4px rgba(255,255,255,0.3)`
+              : carLevel >= 2
+              ? '0 0 15px #fbbf24, inset 0 2px 4px rgba(255,255,255,0.2)'
+              : `0 0 15px ${selectedCar.color === 'cyan' ? '#06b6d4' : selectedCar.color === 'purple' ? '#8b5cf6' : selectedCar.color === 'yellow' ? '#f59e0b' : selectedCar.color === 'blue' ? '#3b82f6' : selectedCar.color === 'red' ? '#ef4444' : '#374151'}, inset 0 2px 4px rgba(255,255,255,0.2)`,
+            filter: carLevel >= 8 ? `brightness(${1.3 + (carLevel - 8) * 0.1}) saturate(${0.8 + (carLevel - 8) * 0.05})` : 
+                     carLevel >= 6 ? 'brightness(1.2) saturate(0.9)' :
+                     carLevel >= 4 ? 'brightness(1.1) saturate(0.95)' :
+                     carLevel >= 2 ? 'brightness(1.05)' : 'none'
           }}
         >
           {/* Front Windshield */}
@@ -991,27 +1017,68 @@ export default function NeonDriftGame({
           </div>
           
           {/* Central Racing Stripe */}
-          <div className={`absolute top-1/4 left-1/2 transform -translate-x-1/2 w-0.5 h-1/2 ${carLevel > 5 ? 'bg-yellow-400/80' : 'bg-white/30'} rounded-full`} />
+          <div className={`absolute top-1/4 left-1/2 transform -translate-x-1/2 w-0.5 h-1/2 ${
+            carLevel >= 8 ? 'bg-white/90' : 
+            carLevel >= 6 ? 'bg-white/80' : 
+            carLevel >= 4 ? 'bg-yellow-400/80' : 
+            carLevel >= 2 ? 'bg-white/60' : 'bg-white/30'
+          } rounded-full transition-all duration-700`} />
           
-          {/* Side Racing Stripes (Level 8+) */}
-          {carLevel > 8 && (
+          {/* Side Racing Stripes (Level 6+) */}
+          {carLevel >= 6 && (
             <>
-              <div className="absolute top-1/4 left-1/4 w-0.5 h-1/2 bg-yellow-400/60 rounded-full" />
-              <div className="absolute top-1/4 right-1/4 w-0.5 h-1/2 bg-yellow-400/60 rounded-full" />
+              <div className={`absolute top-1/4 left-1/4 w-0.5 h-1/2 ${
+                carLevel >= 8 ? 'bg-white/80' : 'bg-yellow-400/60'
+              } rounded-full transition-all duration-700`} />
+              <div className={`absolute top-1/4 right-1/4 w-0.5 h-1/2 ${
+                carLevel >= 8 ? 'bg-white/80' : 'bg-yellow-400/60'
+              } rounded-full transition-all duration-700`} />
             </>
           )}
           
-          {/* Rear Spoiler (Level 3+) */}
+          {/* Additional racing stripes for high levels (Level 10+) */}
+          {carLevel >= 10 && (
+            <>
+              <div className="absolute top-1/6 left-1/3 w-0.25 h-2/3 bg-white/70 rounded-full" />
+              <div className="absolute top-1/6 right-1/3 w-0.25 h-2/3 bg-white/70 rounded-full" />
+            </>
+          )}
+          
+          {/* Rear Spoiler (Level 4+) */}
           {carUpgrades.wings && (
-            <div className="absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-3/4 h-0.5 bg-gradient-to-r from-black/60 via-black/80 to-black/60 rounded-sm shadow-sm" />
+            <div className={`absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-3/4 h-0.5 ${
+              carLevel >= 8 ? 'bg-gradient-to-r from-white/80 via-white/90 to-white/80' :
+              carLevel >= 6 ? 'bg-gradient-to-r from-cyan-400/80 via-cyan-500/90 to-cyan-400/80' :
+              'bg-gradient-to-r from-black/60 via-black/80 to-black/60'
+            } rounded-sm shadow-sm transition-all duration-700`} />
           )}
           
           {/* Tail Lights */}
-          <div className={`absolute bottom-0.5 left-1 w-1 h-0.5 rounded-sm ${carLevel > 5 ? 'bg-cyan-400' : 'bg-red-500'} shadow-sm`}>
-            <div className={`w-full h-full bg-gradient-to-r ${carLevel > 5 ? 'from-cyan-300 to-cyan-500' : 'from-red-400 to-red-600'} rounded-sm animate-pulse`} />
+          <div className={`absolute bottom-0.5 left-1 w-1 h-0.5 rounded-sm ${
+            carLevel >= 8 ? 'bg-white' : 
+            carLevel >= 6 ? 'bg-cyan-400' : 
+            carLevel >= 4 ? 'bg-yellow-400' : 
+            'bg-red-500'
+          } shadow-sm transition-all duration-700`}>
+            <div className={`w-full h-full bg-gradient-to-r ${
+              carLevel >= 8 ? 'from-white to-cyan-200' : 
+              carLevel >= 6 ? 'from-cyan-300 to-cyan-500' : 
+              carLevel >= 4 ? 'from-yellow-300 to-yellow-500' : 
+              'from-red-400 to-red-600'
+            } rounded-sm animate-pulse`} />
           </div>
-          <div className={`absolute bottom-0.5 right-1 w-1 h-0.5 rounded-sm ${carLevel > 5 ? 'bg-cyan-400' : 'bg-red-500'} shadow-sm`}>
-            <div className={`w-full h-full bg-gradient-to-l ${carLevel > 5 ? 'from-cyan-300 to-cyan-500' : 'from-red-400 to-red-600'} rounded-sm animate-pulse`} />
+          <div className={`absolute bottom-0.5 right-1 w-1 h-0.5 rounded-sm ${
+            carLevel >= 8 ? 'bg-white' : 
+            carLevel >= 6 ? 'bg-cyan-400' : 
+            carLevel >= 4 ? 'bg-yellow-400' : 
+            'bg-red-500'
+          } shadow-sm transition-all duration-700`}>
+            <div className={`w-full h-full bg-gradient-to-l ${
+              carLevel >= 8 ? 'from-white to-cyan-200' : 
+              carLevel >= 6 ? 'from-cyan-300 to-cyan-500' : 
+              carLevel >= 4 ? 'from-yellow-300 to-yellow-500' : 
+              'from-red-400 to-red-600'
+            } rounded-sm animate-pulse`} />
           </div>
           
           {/* Exhaust Flames (Boost Effect) */}
@@ -1022,18 +1089,9 @@ export default function NeonDriftGame({
             </>
           )}
           
-          {/* Level Indicator Badge */}
-          {carLevel > 1 && (
-            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-              <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-black text-xs px-1.5 py-0.5 rounded-full font-bold shadow-sm border border-yellow-300">
-                L{carLevel}
-              </div>
-            </div>
-          )}
-          
-          {/* Carbon Fiber Effect (Level 6+) */}
-          {carLevel > 6 && (
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/10 to-black/20 opacity-60" 
+          {/* Carbon Fiber Effect (Level 4+) */}
+          {carLevel >= 4 && (
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/10 to-black/20 opacity-60 transition-all duration-700" 
                  style={{
                    backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(0,0,0,0.1) 1px, rgba(0,0,0,0.1) 2px)',
                    clipPath: 'polygon(20% 0%, 80% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)',
@@ -1041,20 +1099,47 @@ export default function NeonDriftGame({
                  }} />
           )}
           
-          {/* God mode effects (Level 10) */}
-          {carLevel >= 10 && (
+          {/* God mode effects (Level 8+) */}
+          {carLevel >= 8 && (
             <>
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-purple-500/30 rounded-lg animate-pulse" />
-              <div className="absolute -inset-1 bg-gradient-to-r from-purple-400 via-yellow-400 to-purple-400 rounded-lg opacity-20 animate-spin" style={{ animationDuration: '3s' }} />
+              <div className={`absolute inset-0 ${
+                carLevel >= 12 ? 'bg-gradient-to-r from-white/40 via-cyan-500/40 to-white/40' :
+                carLevel >= 10 ? 'bg-gradient-to-r from-cyan-500/30 via-white/30 to-cyan-500/30' :
+                'bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-purple-500/30'
+              } rounded-lg animate-pulse transition-all duration-1000`} />
+              <div className={`absolute -inset-1 ${
+                carLevel >= 12 ? 'bg-gradient-to-r from-white via-cyan-400 to-white' :
+                carLevel >= 10 ? 'bg-gradient-to-r from-cyan-400 via-white to-cyan-400' :
+                'bg-gradient-to-r from-purple-400 via-yellow-400 to-purple-400'
+              } rounded-lg opacity-20 animate-spin transition-all duration-1000`} style={{ animationDuration: '3s' }} />
             </>
+          )}
+          
+          {/* Ultimate god mode lightning effect (Level 12+) */}
+          {carLevel >= 12 && (
+            <div className="absolute inset-0 overflow-hidden rounded-lg">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" 
+                   style={{ 
+                     background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%)',
+                     animation: 'lightning 0.8s infinite'
+                   }} />
+            </div>
           )}
         </div>
         
-        {/* Aerodynamic Wings (Level 3+) */}
+        {/* Aerodynamic Wings (Level 4+) */}
         {carUpgrades.wings && (
           <>
-            <div className="absolute top-1/3 -left-1 w-1.5 h-0.5 bg-gradient-to-r from-black/80 to-transparent rounded-r transform rotate-12 shadow-sm" />
-            <div className="absolute top-1/3 -right-1 w-1.5 h-0.5 bg-gradient-to-l from-black/80 to-transparent rounded-l transform -rotate-12 shadow-sm" />
+            <div className={`absolute top-1/3 -left-1 w-1.5 h-0.5 ${
+              carLevel >= 8 ? 'bg-gradient-to-r from-white/90 to-transparent' :
+              carLevel >= 6 ? 'bg-gradient-to-r from-cyan-400/80 to-transparent' :
+              'bg-gradient-to-r from-black/80 to-transparent'
+            } rounded-r transform rotate-12 shadow-sm transition-all duration-700`} />
+            <div className={`absolute top-1/3 -right-1 w-1.5 h-0.5 ${
+              carLevel >= 8 ? 'bg-gradient-to-l from-white/90 to-transparent' :
+              carLevel >= 6 ? 'bg-gradient-to-l from-cyan-400/80 to-transparent' :
+              'bg-gradient-to-l from-black/80 to-transparent'
+            } rounded-l transform -rotate-12 shadow-sm transition-all duration-700`} />
           </>
         )}
       </motion.div>
@@ -1139,6 +1224,7 @@ export default function NeonDriftGame({
     {/* Language Learning Component */}
     <LanguageLearning
       currentQuestion={currentQuestion}
+      questionType={questionType}
       isQuestionActive={isQuestionActive}
       currentChapter={selectedChapter as keyof typeof vocabularyDatabase}
       playerHealth={health}

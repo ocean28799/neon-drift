@@ -140,3 +140,11 @@ body {
   border: none;
   box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
 }
+
+/* Lightning animation for ultimate god mode */
+@keyframes lightning {
+  0% { transform: translateX(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
