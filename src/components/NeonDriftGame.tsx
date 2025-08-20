@@ -599,9 +599,9 @@ export default function NeonDriftGame({
       const carBottom = carTop + 8 // Car height
       
       const boxLeft = box.x
-      const boxRight = box.x + 6 // Box width (small mobile size)
+      const boxRight = box.x + 4 // Box width (small mobile size: 6*0.7 ≈ 4)
       const boxTop = box.y
-      const boxBottom = box.y + 6 // Box height
+      const boxBottom = box.y + 4 // Box height
       
       // Check if rectangles overlap
       if (carLeft < boxRight && carRight > boxLeft && 
@@ -947,8 +947,8 @@ export default function NeonDriftGame({
         // Remove boxes that went off screen
         const filteredBoxes = movingBoxes.filter(box => box.y < 110)
         
-        // Randomly spawn new mystery boxes (2% chance per frame)
-        if (Math.random() < 0.02 && filteredBoxes.length < 3) {
+        // Randomly spawn new mystery boxes (5% chance per frame for testing)
+        if (Math.random() < 0.05 && filteredBoxes.length < 2) {
           const rarityRoll = Math.random()
           let type: 'common' | 'rare' | 'epic' | 'legendary'
           
@@ -965,7 +965,7 @@ export default function NeonDriftGame({
           
           const newBox = {
             id: generateId(),
-            x: Math.random() * 70 + 15, // Random position across the road
+            x: Math.random() * 60 + 20, // More constrained for mobile (20% to 80%)
             y: -10, // Start above screen
             type
           }
@@ -1214,6 +1214,7 @@ export default function NeonDriftGame({
             x={box.x}
             y={box.y}
             type={box.type}
+            size="small"
             onCollect={() => {
               // Remove collected mystery box
               setMysteryBoxes(prev => prev.filter(b => b.id !== box.id))

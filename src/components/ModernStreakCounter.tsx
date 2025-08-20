@@ -69,15 +69,16 @@ export default function ModernStreakCounter({
       <AnimatePresence mode="wait">
         <motion.div
           key={streak}
-          className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 pointer-events-none"
-          initial={{ opacity: 0, y: 50, scale: 0.5 }}
+          className="fixed top-16 right-4 transform z-50 pointer-events-none
+                     lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2 lg:right-auto lg:top-auto"
+          initial={{ opacity: 0, y: -30, scale: 0.5 }}
           animate={{ 
             opacity: 1, 
             y: 0, 
             scale: 1,
             rotateY: [0, 360]
           }}
-          exit={{ opacity: 0, y: -50, scale: 0.5 }}
+          exit={{ opacity: 0, y: -30, scale: 0.5 }}
           transition={{ 
             duration: 0.8, 
             type: "spring", 
@@ -86,7 +87,7 @@ export default function ModernStreakCounter({
           }}
         >
           <motion.div
-            className={`bg-gradient-to-r ${getStreakColor()} rounded-2xl p-4 border-2 border-white/30 backdrop-blur-xl`}
+            className={`bg-gradient-to-r ${getStreakColor()} rounded-xl p-2 lg:p-4 border-2 border-white/30 backdrop-blur-xl`}
             animate={{
               boxShadow: [
                 `0 0 20px ${getStreakGlow()}`,
@@ -101,17 +102,17 @@ export default function ModernStreakCounter({
               ease: "easeInOut"
             }}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 lg:gap-3">
               <motion.div
                 animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
               >
-                <StreakIcon className="w-8 h-8 text-white drop-shadow-lg" />
+                <StreakIcon className="w-5 h-5 lg:w-8 lg:h-8 text-white drop-shadow-lg" />
               </motion.div>
               
               <div className="text-center">
                 <motion.div 
-                  className="text-3xl font-bold text-white drop-shadow-lg"
+                  className="text-xl lg:text-3xl font-bold text-white drop-shadow-lg"
                   animate={{ 
                     scale: [1, 1.2, 1],
                     textShadow: [
@@ -124,7 +125,7 @@ export default function ModernStreakCounter({
                 >
                   {streak}
                 </motion.div>
-                <div className="text-sm font-semibold text-white/90 drop-shadow">
+                <div className="text-xs lg:text-sm font-semibold text-white/90 drop-shadow">
                   STREAK
                 </div>
               </div>
@@ -133,7 +134,7 @@ export default function ModernStreakCounter({
                 animate={{ rotate: [0, -10, 10, 0] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
               >
-                <Flame className="w-8 h-8 text-white drop-shadow-lg" />
+                <Flame className="w-5 h-5 lg:w-8 lg:h-8 text-white drop-shadow-lg" />
               </motion.div>
             </div>
           </motion.div>

@@ -38,9 +38,9 @@ const boxTypes = {
 }
 
 const sizes = {
-  small: 'w-8 h-8',
-  medium: 'w-12 h-12',
-  large: 'w-16 h-16'
+  small: 'w-6 h-6 md:w-8 md:h-8',
+  medium: 'w-8 h-8 md:w-12 md:h-12',
+  large: 'w-10 h-10 md:w-16 md:h-16'
 }
 
 export default function MysteryBox({ 
