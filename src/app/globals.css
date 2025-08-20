@@ -148,3 +148,9 @@ body {
   90% { opacity: 1; }
   100% { transform: translateX(100%); opacity: 0; }
 }
+
+/* Speed line animation for simplified game */
+@keyframes speedLine {
+  0% { transform: translateY(-100px); }
+  100% { transform: translateY(100vh); }
+}

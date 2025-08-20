@@ -6,11 +6,12 @@ import { Pause, Zap, Shield } from 'lucide-react'
 import { soundEngine } from '@/utils/soundEngine'
 import ParticleSystem from './ParticleSystem'
 import CarTrail from './CarTrail'
-import GameHUD from './GameHUD'
-import ComboSystem from './ComboSystem'
+import ModernGameHUD from './ModernGameHUD'
+import UltraComboSystem from './UltraComboSystem'
 import ScreenShake from './ScreenShake'
 import NearMissEffect from './NearMissEffect'
-import StreakCounter from './StreakCounter'
+import ModernStreakCounter from './ModernStreakCounter'
+import UltraParticleSystem from './UltraParticleSystem'
 import LanguageLearningDesktop from './LanguageLearningDesktop'
 import AnswerBoxDesktop from './AnswerBoxDesktop'
 import Car3DDesktop from './Car3DDesktop'
@@ -636,7 +637,7 @@ export default function NeonDriftGameDesktop({
         </div>
 
         {/* Game HUD */}
-        <GameHUD 
+        <ModernGameHUD 
           score={score}
           speed={speed}
           shieldTime={powerups.shield > 0 ? powerups.shield - Date.now() : 0}
@@ -649,16 +650,48 @@ export default function NeonDriftGameDesktop({
         />
 
         {/* Addictive Features */}
-        <ComboSystem 
+        <UltraComboSystem 
           combo={combo} 
-          multiplier={multiplier} 
-          onComboBreak={() => {
-            setCombo(0)
-            setMultiplier(1.0)
+          maxCombo={combo}
+          isVisible={true}
+          onComboMilestone={() => {
+            setCombo(prev => prev + 1)
+            setMultiplier(prev => Math.min(prev + 0.1, 3.0))
           }} 
         />
-        <StreakCounter visible={totalCoins > 0} />
+        <ModernStreakCounter 
+          streak={combo}
+          isVisible={combo > 2}
+          onStreakMilestone={() => {
+            // Handle streak milestone
+          }}
+        />
         <NearMissEffect triggers={nearMisses} />
+
+        {/* Ultra Particle Effects */}
+        <UltraParticleSystem
+          isActive={powerups.boost > 0}
+          intensity={2}
+          type="boost"
+          position={{ x: 15, y: playerY }}
+          direction="right"
+        />
+        
+        <UltraParticleSystem
+          isActive={powerups.shield > 0}
+          intensity={1.5}
+          type="powerup"
+          position={{ x: 15, y: playerY }}
+          direction="explosion"
+        />
+
+        <UltraParticleSystem
+          isActive={true}
+          intensity={0.5}
+          type="ambient"
+          position={{ x: 50, y: 50 }}
+          direction="ambient"
+        />
 
         {/* Car trail effect - horizontal */}
         <CarTrail 

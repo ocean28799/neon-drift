@@ -1,18 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { Pause, Zap, Shield } from 'lucide-react'
 import { soundEngine } from '@/utils/soundEngine'
-import ParticleSystem from './ParticleSystem'
-import CarTrail from './CarTrail'
-import GameHUD from './GameHUD'
-import ComboSystem from './ComboSystem'
+import ModernGameHUD from './ModernGameHUD'
 import ScreenShake from './ScreenShake'
 import NearMissEffect from './NearMissEffect'
-import StreakCounter from './StreakCounter'
+import ModernStreakCounter from './ModernStreakCounter'
 import LanguageLearning from './LanguageLearning'
 import AnswerBox from './AnswerBox'
+import UltraComboSystem from './UltraComboSystem'
+import MysteryBox from './MysteryBox'
 
 // Import all vocabulary chapters
 import { chapter01Words } from '@/vocabulary/chapter01-basic-everyday'
@@ -150,10 +147,10 @@ export default function NeonDriftGame({
   selectedChapter,
   selectedRound 
 }: NeonDriftGameProps) {
+  // Local state - keeping for now, will migrate to Zustand later
   const [playerX, setPlayerX] = useState(50) // percentage
-  const [gameObjects, setGameObjects] = useState<GameObject[]>([])
   const [score, setScore] = useState(0)
-  const [speed, setSpeed] = useState(1) // Reduced from 2 to 1
+  const [speed] = useState(1) // Reduced from 2 to 1
   const [health, setHealth] = useState(3) // New health system
   const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const [roundComplete, setRoundComplete] = useState(false)
@@ -187,9 +184,7 @@ export default function NeonDriftGame({
   // Question timing
   const questionTimer = useRef(0)
   const QUESTION_INTERVAL = 30000 // 30 seconds between questions
-  const [timeUntilNextQuestion, setTimeUntilNextQuestion] = useState(QUESTION_INTERVAL)
   
-  const currentMusicTrack = useRef('gameMusic')
   const [powerups, setPowerups] = useState<{ shield: number; boost: number }>({
     shield: 0,
     boost: 0
@@ -199,44 +194,62 @@ export default function NeonDriftGame({
   // Addictive features state
   const [combo, setCombo] = useState(0)
   const [multiplier, setMultiplier] = useState(1.0)
-  const [coinStreak, setCoinStreak] = useState(0)
   const [shakeIntensity, setShakeIntensity] = useState(0)
   const [shakeTrigger, setShakeTrigger] = useState(0)
   const [nearMisses, setNearMisses] = useState<Array<{ id: string; x: number; y: number }>>([])
-  const [totalCoins, setTotalCoins] = useState(0)
+  
+  // Mystery boxes and game objects
+  const [mysteryBoxes, setMysteryBoxes] = useState<Array<{
+    id: string
+    x: number
+    y: number
+    type: 'common' | 'rare' | 'epic' | 'legendary'
+  }>>([])
+  
+  // Game objects for spawning
+  const [gameObjects, setGameObjects] = useState<GameObject[]>([])
   const [upcomingItems, setUpcomingItems] = useState<PreviewItem[]>([])
   
-  // Language learning timer
+  // Device orientation for mobile
+  const [deviceOrientation, setDeviceOrientation] = useState({ gamma: 0 })
+  
+  // Lane system
+  const [currentLane, setCurrentLane] = useState<'left' | 'right'>('left')
+  // Keep only essential local refs for performance
+  const gameAreaRef = useRef<HTMLDivElement>(null)
+  const gameLoopRef = useRef<number | null>(null)
   const languageLearningTimer = useRef(0)
   const LANGUAGE_LEARNING_INTERVAL = 45000 // 45 seconds
   
-  const gameLoopRef = useRef<number | null>(null)
-  const lastObjectSpawn = useRef(0)
-  const gameAreaRef = useRef<HTMLDivElement>(null)
-
   // Generate a unique ID
+  const generateId = () => Math.random().toString(36).substr(2, 9)
+  
   // Initialize sounds
   useEffect(() => {
     soundEngine.initSounds()
     soundEngine.enable()
   }, [])
 
-  // Generate a unique ID
-  const generateId = () => Math.random().toString(36).substr(2, 9)
-
-  // Generate a new question
+  // Generate a new question using Zustand actions
   const generateQuestion = useCallback(() => {
     const vocabulary = vocabularyDatabase[selectedChapter as keyof typeof vocabularyDatabase] || vocabularyDatabase.chapter01
-    const availableWords = vocabulary.filter(word => word.difficulty <= Math.min(3, Math.floor(speed / 2) + 1))
+    // More flexible difficulty - allow higher level players to get all difficulties
+    // Capture carLevel at the time of function call to avoid dependency issues
+    const currentCarLevel = carLevel
+    const maxDifficulty = Math.min(3, Math.max(1, Math.floor(currentCarLevel / 3) + 1))
+    const availableWords = vocabulary.filter(word => word.difficulty <= maxDifficulty)
     
-    if (availableWords.length === 0) return
+    // Fallback to all words if no words match the difficulty
+    const wordsToUse = availableWords.length > 0 ? availableWords : vocabulary
     
-    const word = availableWords[Math.floor(Math.random() * availableWords.length)]
+    if (wordsToUse.length === 0) return
+    
+    const word = wordsToUse[Math.floor(Math.random() * wordsToUse.length)]
     
     // Always Vietnamese → English (translate mode only)
     const type = 'translate' // Fixed to always be translate (Vietnamese question, English answer)
     
-    setQuestionType(type) // Set the question type state
+    setQuestionType(type) // Use Zustand action
     
     // Get wrong answer from same category
     const wrongAnswers = vocabulary.filter(w => w.id !== word.id && w.category === word.category)
@@ -245,6 +258,13 @@ export default function NeonDriftGame({
     const correctAnswer = word.english // Always English answer
     const wrongAnswer = wrongWord.english // Always English wrong answer
     const correctSide: 'left' | 'right' = Math.random() > 0.5 ? 'left' : 'right'
+    
+    console.log(`Generating question at car level ${currentCarLevel}:`, {
+      question: word.vietnamese,
+      correctAnswer,
+      wrongAnswer,
+      correctSide
+    })
     
     setCurrentQuestion(word)
     setIsQuestionActive(true)
@@ -293,74 +313,127 @@ export default function NeonDriftGame({
         color: rightColor
       }
       
-      console.log(`Correct side: ${correctSide}`)
-      console.log(`Left box: "${leftBox.answer}" (correct: ${leftBox.isCorrect}) - ${leftBox.color}`)
-      console.log(`Right box: "${rightBox.answer}" (correct: ${rightBox.isCorrect}) - ${rightBox.color}`)
+      console.log(`Answer boxes generated:`, {
+        leftBox: `"${leftBox.answer}" (${leftBox.isCorrect ? 'correct' : 'wrong'})`,
+        rightBox: `"${rightBox.answer}" (${rightBox.isCorrect ? 'correct' : 'wrong'})`
+      })
       
       setAnswerBoxes([leftBox, rightBox])
     }, 2000) // 2 second delay
-  }, [selectedChapter, speed])
+  }, [selectedChapter, carLevel]) // Keep carLevel dependency for useCallback, but remove from useEffect
 
-  // Car upgrade function
+  // Generate new question without triggering on carLevel changes
+  const generateNewQuestion = useCallback(() => {
+    // Only generate if no question is currently active
+    if (!isQuestionActive && questionTimer.current === 0) {
+      generateQuestion()
+    }
+  }, [generateQuestion, isQuestionActive])
+
+  // Start first question immediately
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      generateNewQuestion()
+    }, 1000) // Small delay to ensure everything is initialized
+    
+    return () => clearTimeout(timer)
+  }, [generateNewQuestion]) // Include the dependency
+
+  // Car upgrade function - ULTRA PROTECTION against level jumping
   const upgradeCarLevel = useCallback(() => {
+    // QUINTUPLE PROTECTION SYSTEM
+    // 0. Time-based protection - minimum 300ms between upgrades
+    const now = Date.now()
+    if (now - lastUpgradeTime.current < 300) {
+      console.log('🚫 BLOCKED: Too soon since last upgrade (< 300ms)')
+      return
+    }
+    
+    // 1. Check if collision is still being processed
+    if (collisionProcessing.current) {
+      console.log('🚫 BLOCKED: Collision still being processed')
+      return
+    }
+    
+    // 2. Check if upgrade is already in progress
+    if (upgradeInProgress.current) {
+      console.log('🚫 BLOCKED: Upgrade already in progress')
+      return
+    }
+    
+    // 3. Prevent multiple upgrades from the same question
+    const currentQuestionId = currentQuestion?.id
+    if (currentQuestionId && lastQuestionId.current === currentQuestionId) {
+      console.log('🚫 BLOCKED: Already upgraded for this question ID:', currentQuestionId)
+      return
+    }
+    
+    // 4. Lock the upgrade process immediately and record time
+    upgradeInProgress.current = true
+    lastUpgradeTime.current = now
+    
+    if (currentQuestionId) {
+      lastQuestionId.current = currentQuestionId
+    }
+    
     setCarLevel(prev => {
       const newLevel = prev + 1
+      console.log(`🚗 CAR LEVEL UPGRADE: ${prev} → ${newLevel}`)
       
-      // Apply upgrades based on level - now upgrades every 2 levels
+      // Safety check: prevent extremely high levels from breaking the game
+      if (newLevel > 50) {
+        console.warn('Car level exceeds maximum, resetting to 50')
+        upgradeInProgress.current = false // Reset lock
+        return 50
+      }
+      
+      // ADDICTIVE SOUND EFFECTS based on level
+      if (newLevel <= 5) {
+        soundEngine.play('success', 0.9) // Normal success sound
+      } else if (newLevel <= 10) {
+        soundEngine.play('success', 1.0) // Slightly louder
+        // Add a satisfying "ding" sound for higher levels
+        setTimeout(() => soundEngine.play('success', 0.5), 150)
+      } else {
+        // Epic level up sound for high levels
+        soundEngine.play('success', 1.0)
+        setTimeout(() => soundEngine.play('success', 0.7), 100)
+        setTimeout(() => soundEngine.play('success', 0.5), 200)
+      }
+      
+      // Simplified upgrades - no size changes or complex effects to prevent level 5-6 issues
       setCarUpgrades(prevUpgrades => {
         const newUpgrades = { ...prevUpgrades }
         
-        switch(newLevel) {
-          case 2:
-            // Level 2: Speed boost
-            newUpgrades.speed = 1.2
-            break
-          case 4:
-            // Level 4: Better handling + wings
-            newUpgrades.handling = 1.3
-            newUpgrades.wings = true
-            break
-          case 6:
-            // Level 6: Smaller size (harder to hit) + speed boost
-            newUpgrades.size = 0.8
-            newUpgrades.speed = 1.5
-            break
-          case 8:
-            // Level 8: God mode begins + boost + shield
-            newUpgrades.boost = true
-            newUpgrades.shield = true
-            newUpgrades.speed = 2.0
-            break
-          case 10:
-            // Level 10: Ultra compact
-            newUpgrades.size = 0.6
-            newUpgrades.handling = 1.8
-            break
-          case 12:
-            // Level 12: Enhanced handling
-            newUpgrades.handling = 2.0
-            break
-          case 14:
-            // Level 14: Ultimate god mode
-            newUpgrades.speed = 2.5
-            newUpgrades.size = 0.5
-            newUpgrades.handling = 2.5
-            break
+        // Only simple speed upgrades to prevent rendering issues
+        if (newLevel >= 2) {
+          newUpgrades.speed = Math.min(1.1 + (newLevel * 0.05), 2.0) // Gradual speed increase
         }
+        if (newLevel >= 4) {
+          newUpgrades.handling = Math.min(1.1 + (newLevel * 0.02), 1.5) // Gradual handling increase
+        }
+        // Remove all size, wings, boost, shield upgrades that could cause issues
+        newUpgrades.size = 1.0 // Keep constant size
+        newUpgrades.wings = false
+        newUpgrades.boost = false
+        newUpgrades.shield = false
         
+        console.log(`✅ Level ${newLevel} upgrades applied - UI stable, size fixed at 1.0`)
         return newUpgrades
       })
       
+      // Reset upgrade lock after a delay
+      setTimeout(() => {
+        upgradeInProgress.current = false
+        console.log(`🔓 Upgrade lock released for level ${newLevel}`)
+      }, 500) // Longer delay to prevent rapid upgrades
+      
       return newLevel
     })
-  }, [])
+  }, [currentQuestion])
 
-  // Two-lane system state
-  const [currentLane, setCurrentLane] = useState<'left' | 'right'>('left') // Start in left lane
+  // Two-lane system state - using declarations from above
   const [laneChangeKeys, setLaneChangeKeys] = useState<Set<string>>(new Set())
-  
-  // Device orientation for phone tilt controls
-  const [deviceOrientation, setDeviceOrientation] = useState({ gamma: 0 })
 
   // Lane-based collision detection - more reliable for two-lane system
   const checkAnswerBoxCollision = useCallback((box: {
@@ -397,10 +470,18 @@ export default function NeonDriftGame({
     return collision
   }, [currentLane])
 
-  // Clean Answer Box Collision Handler - FIXED VERSION
+  // Add collision protection to prevent level jumping - ENHANCED
+  const collisionProcessing = useRef(false)
+  const lastQuestionId = useRef<string | null>(null)
+  const upgradeInProgress = useRef(false) // Additional protection for upgrades
+  const lastUpgradeTime = useRef(0) // Track last upgrade time to prevent rapid-fire
+  
+  // Clean Answer Box Collision Handler - ULTIMATE PROTECTION
   const handleAnswerBoxCollisions = useCallback(() => {
-    // Safety checks
-    if (!isQuestionActive || answerBoxes.length === 0) return
+    // MULTIPLE SAFETY CHECKS
+    if (!isQuestionActive || answerBoxes.length === 0 || collisionProcessing.current || upgradeInProgress.current) {
+      return
+    }
     
     // Find the answer box in the current lane
     const boxInCurrentLane = answerBoxes.find(box => box.lane === currentLane)
@@ -412,6 +493,9 @@ export default function NeonDriftGame({
       console.log('🎯 ANSWER BOX COLLISION DETECTED!')
       console.log(`Car lane: ${currentLane}, Box lane: ${boxInCurrentLane.lane}`)
       console.log(`Answer: "${boxInCurrentLane.answer}", Is Correct: ${boxInCurrentLane.isCorrect}`)
+      
+      // CRITICAL: Immediately set ALL processing flags to prevent multiple calls
+      collisionProcessing.current = true
       
       // CRITICAL: Capture the collision result IMMEDIATELY before any state changes
       const wasCorrectAnswer = boxInCurrentLane.isCorrect
@@ -428,13 +512,12 @@ export default function NeonDriftGame({
         // CORRECT ANSWER - NO HEALTH LOSS
         setScore(prev => prev + 100)
         setCombo(prev => prev + 1)
-        soundEngine.play('success', 0.8)
         
         // Add success effects
         setShakeIntensity(2) // Gentle shake for success
         setShakeTrigger(prev => prev + 1)
         
-        // Upgrade car level for progression
+        // Upgrade car level for progression (includes addictive sounds)
         upgradeCarLevel()
         
         // Create success particles
@@ -485,6 +568,11 @@ export default function NeonDriftGame({
         setShakeTrigger(prev => prev + 1)
       }
       
+      // Reset collision processing flag after answer is processed
+      setTimeout(() => {
+        collisionProcessing.current = false
+      }, 100)
+      
       // Set timer for next question with appropriate delay
       questionTimer.current = Date.now()
     }
@@ -500,6 +588,62 @@ export default function NeonDriftGame({
     playerX,
     upgradeCarLevel
   ])
+
+  // Handle mystery box collisions
+  const handleMysteryBoxCollisions = useCallback(() => {
+    // Check for collision between car and mystery boxes
+    mysteryBoxes.forEach(box => {
+      const carLeft = playerX
+      const carRight = playerX + 12 // Car width
+      const carTop = 85 // Car Y position
+      const carBottom = carTop + 8 // Car height
+      
+      const boxLeft = box.x
+      const boxRight = box.x + 6 // Box width (small mobile size)
+      const boxTop = box.y
+      const boxBottom = box.y + 6 // Box height
+      
+      // Check if rectangles overlap
+      if (carLeft < boxRight && carRight > boxLeft && 
+          carTop < boxBottom && carBottom > boxTop) {
+        // Collision detected! Trigger the box's onCollect function
+        const points = {
+          common: 50,
+          rare: 100,
+          epic: 200,
+          legendary: 500
+        }[box.type]
+        
+        // Remove the collected box
+        setMysteryBoxes(prev => prev.filter(b => b.id !== box.id))
+        
+        // Award points
+        setScore(prev => prev + points)
+        
+        // Create sparkle particle effect
+        const newParticles = Array.from({length: 10}, (_, i) => ({
+          id: `sparkle-${Date.now()}-${i}`,
+          x: box.x + Math.random() * 6,
+          y: box.y + Math.random() * 6,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8
+        }))
+        setParticles(prev => [...prev, ...newParticles])
+        
+        // Play collection sound based on rarity
+        const soundVolume = {
+          common: 0.3,
+          rare: 0.4,
+          epic: 0.5,
+          legendary: 0.7
+        }[box.type]
+        
+        soundEngine.play('boost', soundVolume) // Use boost sound for collection
+        
+        console.log(`🎁 Mystery box collected! Type: ${box.type}, Points: +${points}`)
+      }
+    })
+  }, [mysteryBoxes, playerX, setMysteryBoxes, setScore, setParticles])
 
   // Handle lane changes for two-lane system with device orientation support
   useEffect(() => {
@@ -620,14 +764,14 @@ export default function NeonDriftGame({
         if (Math.abs(diff) < 1) return targetX
         
         // Fast, smooth movement - prioritize responsiveness over slow animation
-        const smoothness = 0.4 * carUpgrades.handling // Increased base speed
+        const smoothness = 0.4 // Fixed value to prevent upgrade issues
         return prev + (diff * Math.min(smoothness, 0.9)) // Increased max speed to 0.9
       })
     }
 
     const interval = setInterval(moveToLane, 12) // Faster update rate for smoother movement
     return () => clearInterval(interval)
-  }, [currentLane, carUpgrades.handling])
+  }, [currentLane]) // Removed carUpgrades.handling dependency
 
   // Generate upcoming items preview
   const generateUpcomingItems = useCallback(() => {
@@ -700,10 +844,10 @@ export default function NeonDriftGame({
     return
   }, [])
 
-  // Collision detection
+  // Collision detection - simplified to prevent upgrade issues
   const checkCollision = useCallback((obj: GameObject) => {
-    const playerWidth = 6 * carUpgrades.size // Use upgraded size
-    const playerHeight = 10 * carUpgrades.size // Use upgraded size
+    const playerWidth = 6 // Fixed size
+    const playerHeight = 10 // Fixed size
     const playerY = 85
     
     // Regular collision detection for all objects
@@ -714,7 +858,7 @@ export default function NeonDriftGame({
       obj.y - buffer < playerY + playerHeight &&
       obj.y + obj.height + buffer > playerY
     )
-  }, [playerX, carUpgrades.size])
+  }, [playerX]) // Removed carUpgrades.size dependency
 
   // Handle collisions and scoring
   const handleCollisions = useCallback(() => {
@@ -743,6 +887,9 @@ export default function NeonDriftGame({
       
       // Handle answer box collisions
       handleAnswerBoxCollisions()
+      
+      // Handle mystery box collisions
+      handleMysteryBoxCollisions()
       
       // Move answer boxes down
       setAnswerBoxes(prev => {
@@ -791,11 +938,50 @@ export default function NeonDriftGame({
         // Return only boxes that haven't reached the bottom
         return movingBoxes.filter(box => box.y < 110)
       })
+
+      // Move mystery boxes down and handle spawning
+      setMysteryBoxes(prev => {
+        // Move existing mystery boxes
+        const movingBoxes = prev.map(box => ({ ...box, y: box.y + speed }))
+        
+        // Remove boxes that went off screen
+        const filteredBoxes = movingBoxes.filter(box => box.y < 110)
+        
+        // Randomly spawn new mystery boxes (2% chance per frame)
+        if (Math.random() < 0.02 && filteredBoxes.length < 3) {
+          const rarityRoll = Math.random()
+          let type: 'common' | 'rare' | 'epic' | 'legendary'
+          
+          // Rarity distribution: 60% common, 25% rare, 12% epic, 3% legendary
+          if (rarityRoll < 0.60) {
+            type = 'common'
+          } else if (rarityRoll < 0.85) {
+            type = 'rare'
+          } else if (rarityRoll < 0.97) {
+            type = 'epic'
+          } else {
+            type = 'legendary'
+          }
+          
+          const newBox = {
+            id: generateId(),
+            x: Math.random() * 70 + 15, // Random position across the road
+            y: -10, // Start above screen
+            type
+          }
+          
+          console.log(`🎁 Mystery box spawned! Type: ${type} at position (${newBox.x.toFixed(1)}, ${newBox.y})`)
+          
+          return [...filteredBoxes, newBox]
+        }
+        
+        return filteredBoxes
+      })
       
       // Only generate new questions with proper timing control
       if (!isQuestionActive && questionTimer.current === 0) {
         // Generate first question immediately
-        generateQuestion()
+        generateNewQuestion()
       } else if (!isQuestionActive && questionTimer.current > 0) {
         const timeSinceLastQuestion = Date.now() - questionTimer.current
         // Wait at least 2 seconds between questions to prevent conflicts
@@ -833,392 +1019,228 @@ export default function NeonDriftGame({
         cancelAnimationFrame(gameLoopRef.current)
       }
     }
-  }, [spawnObject, handleCollisions, handleAnswerBoxCollisions, generateQuestion, isQuestionActive, speed, setParticles, setPowerups, onLanguageLearning, onSpeedChange, onGameEnd, score])
+  }, [spawnObject, handleCollisions, handleAnswerBoxCollisions, handleMysteryBoxCollisions, generateNewQuestion, isQuestionActive, speed, setParticles, setPowerups, onLanguageLearning, onSpeedChange, onGameEnd, score])
 
   return (
     <ScreenShake intensity={shakeIntensity} trigger={shakeTrigger} duration={300}>
       <div 
         ref={gameAreaRef} 
-        className={`relative w-full h-screen overflow-hidden transition-all duration-1000 ${
-          carLevel >= 12 ? 'bg-gradient-to-b from-black via-gray-900 to-black' :
-          carLevel >= 10 ? 'bg-gradient-to-b from-gray-900 via-black to-gray-900' :
-          carLevel >= 8 ? 'bg-gradient-to-b from-purple-950 via-black to-purple-950' :
-          carLevel >= 6 ? 'bg-gradient-to-b from-purple-900 via-gray-900 to-black' :
-          carLevel >= 4 ? 'bg-gradient-to-b from-purple-900 via-blue-900 to-gray-900' :
-          carLevel >= 2 ? 'bg-gradient-to-b from-purple-900 via-blue-900 to-black' :
-          'bg-gradient-to-b from-purple-900 via-blue-900 to-black'
-        }`}
+        className="relative w-full h-screen overflow-hidden bg-gradient-to-b from-purple-900 via-blue-900 to-black"
+        style={{ touchAction: 'none' }} // Prevent scrolling on mobile
       >
-        {/* Moving background grid */}
-        <div className="absolute inset-0">
+        {/* Moving background grid - Mobile optimized */}
+        <div className="absolute inset-0" style={{ zIndex: 1 }}>
           <div 
-            className="absolute inset-0 opacity-30"
+            className="absolute inset-0 opacity-20 sm:opacity-30"
             style={{
               backgroundImage: `
                 linear-gradient(to right, cyan 1px, transparent 1px),
                 linear-gradient(to bottom, cyan 1px, transparent 1px)
               `,
-              backgroundSize: '50px 50px',
-              transform: `translateY(${(score * 0.5) % 50}px)`
+              backgroundSize: '30px 30px', // Smaller grid for mobile
+              transform: `translateY(${(score * 0.5) % 30}px)`
             }}
           />
         </div>
 
-        {/* Road lanes - Two lane system */}
-        <div className="absolute inset-0 flex justify-center">
-          <div className="relative w-96 h-full border-l-2 border-r-2 border-cyan-400 opacity-50">
+        {/* Road lanes - Mobile-first responsive design */}
+        <div className="absolute inset-0 flex justify-center" style={{ zIndex: 2 }}>
+          <div className="relative w-full max-w-xs sm:max-w-sm md:w-96 h-full border-l-2 border-r-2 border-cyan-400 opacity-50">
             {/* Center divider for two lanes */}
-            <div className="absolute left-1/2 top-0 w-1 h-full bg-gradient-to-b from-transparent via-cyan-400 to-transparent opacity-80" />
+            <div className="absolute left-1/2 top-0 w-0.5 sm:w-1 h-full bg-gradient-to-b from-transparent via-cyan-400 to-transparent opacity-80" />
           </div>
         </div>
 
-        {/* Game HUD */}
-        <GameHUD 
-          score={score}
-          speed={speed}
-          shieldTime={powerups.shield > 0 ? powerups.shield - Date.now() : 0}
-          boostTime={powerups.boost > 0 ? powerups.boost - Date.now() : 0}
-          health={health}
-          carLevel={carLevel}
-          questionsAnswered={questionsAnswered}
-          roundComplete={roundComplete}
-          onPause={onPause}
-        />
+        {/* Game HUD - Mobile-first with proper z-index */}
+        <div style={{ zIndex: 100 }} className="pointer-events-none">
+          <div className="pointer-events-auto">{/* Allow HUD interactions */}</div>
+          <ModernGameHUD 
+            score={score}
+            speed={speed}
+            shieldTime={powerups.shield > 0 ? powerups.shield - Date.now() : 0}
+            boostTime={powerups.boost > 0 ? powerups.boost - Date.now() : 0}
+            health={health}
+            carLevel={carLevel}
+            questionsAnswered={questionsAnswered}
+            roundComplete={roundComplete}
+            onPause={onPause}
+          />
+        </div>
 
         {/* Question preview removed per user request */}
 
-        {/* Addictive Features */}
-        <ComboSystem 
-          combo={combo} 
-          multiplier={multiplier} 
-          onComboBreak={() => {
-            setCombo(0)
-            setMultiplier(1.0)
-          }} 
-        />
-        <StreakCounter visible={totalCoins > 0} />
+        {/* Addictive Features - ensure high z-index */}
+        <div style={{ zIndex: 90 }}>
+          <UltraComboSystem 
+            combo={combo} 
+            maxCombo={combo}
+            isVisible={true}
+            onComboMilestone={() => {
+              setCombo(prev => prev + 1)
+              setMultiplier(prev => Math.min(prev + 0.1, 3.0))
+            }} 
+          />
+          <ModernStreakCounter 
+            streak={combo}
+            isVisible={combo > 0}
+            onStreakMilestone={() => {
+              // Handle streak milestone
+            }}
+          />
+        </div>
         <NearMissEffect triggers={nearMisses} />
 
-        {/* Old HUD - keeping for backup */}
-        <div className="absolute top-4 left-4 z-20 hidden">
-          <div className="bg-black/50 backdrop-blur-lg rounded-lg p-4 space-y-2">
-            <div className="text-cyan-400 font-bold text-xl">
-              Score: {score.toLocaleString()}
-            </div>
-            <div className="text-purple-400">
-              Speed: {speed.toFixed(1)}x
-            </div>
-            {powerups.shield > 0 && (
-              <div className="flex items-center gap-2 text-blue-400">
-                <Shield className="w-4 h-4" />
-                Shield: {Math.ceil((powerups.shield - Date.now()) / 1000)}s
-              </div>
-            )}
-            {powerups.boost > 0 && (
-              <div className="flex items-center gap-2 text-yellow-400">
-                <Zap className="w-4 h-4" />
-                Boost: {Math.ceil((powerups.boost - Date.now()) / 1000)}s
-              </div>
-            )}
-          </div>
-        </div>
-
-      {/* Old pause button - keeping for backup */}
-      <button
-        onClick={onPause}
-        className="absolute top-4 right-4 z-20 bg-black/50 backdrop-blur-lg rounded-lg p-3 text-white hover:bg-black/70 transition-colors hidden"
-      >
-        <Pause className="w-6 h-6" />
-      </button>
+        {/* Simplified particle effects - removed complex systems */}
 
       {/* Game objects removed - simplified language learning game */}
 
-      {/* Car trail effect */}
-      <CarTrail 
-        playerX={playerX} 
-        playerY={85} 
-        boost={powerups.boost > 0} 
-      />
+      {/* Car trail effect removed - could cause level 5-6 issues */}
 
-      {/* Player car - Sports Car Design (Lamborghini/Bugatti Style) */}
-      <motion.div
-        className="absolute z-10"
+      {/* Mobile-optimized Player car - Ultra Simplified for Level 5-6 Fix */}
+      <div
+        className="absolute"
         style={{
           left: `${playerX}%`,
-          top: '85%',
-          width: `${6 * carUpgrades.size}%`,
-          height: `${10 * carUpgrades.size}%`,
-          transform: carLevel > 4 ? 'scale(1.1)' : 'scale(1)',
-          filter: carLevel >= 8 ? `brightness(${1.2 + (carLevel - 8) * 0.1}) contrast(${1.1 + (carLevel - 8) * 0.05})` : 'none'
-        }}
-        animate={{
-          y: carUpgrades.boost ? [0, -2, 0] : 0,
-          boxShadow: carLevel >= 8 ? [
-            `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`,
-            `0 0 ${30 + carLevel * 3}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`,
-            `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.${Math.min(8, carLevel - 6)})`
-          ] : undefined
-        }}
-        transition={{
-          duration: carUpgrades.boost ? 0.3 : 1,
-          repeat: Infinity,
-          boxShadow: { duration: 2, repeat: Infinity }
+          top: '80%', // Higher position for mobile visibility
+          width: 'clamp(40px, 8%, 60px)', // Responsive width with min/max
+          height: 'clamp(60px, 12%, 90px)', // Responsive height with min/max
+          zIndex: 50, // Higher z-index to ensure visibility
         }}
       >
-        {/* Main Car Body */}
-        <div className={`relative w-full h-full bg-gradient-to-b ${selectedCar.gradient} shadow-2xl ${
-          powerups.shield > 0 || carUpgrades.shield ? 'shadow-blue-500/75' : `shadow-${selectedCar.color}-500/50`
-        } ${carLevel >= 6 ? 'border border-white/60' : carLevel >= 4 ? 'border border-cyan-400/60' : carLevel >= 2 ? 'border border-yellow-400/60' : ''} 
-        transition-all duration-700`}
+        {/* Ultra-simplified car body - no conditional styling */}
+        <div 
+          className={`w-full h-full bg-gradient-to-b ${selectedCar.gradient} rounded-lg border border-white/50`}
           style={{
-            clipPath: 'polygon(20% 0%, 80% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)', // Sports car silhouette
-            borderRadius: '12px 12px 6px 6px',
-            boxShadow: powerups.shield > 0 || carUpgrades.shield
-              ? '0 0 20px #3b82f6, inset 0 2px 4px rgba(255,255,255,0.2)'
-              : carLevel >= 8
-              ? `0 0 ${20 + carLevel * 2}px rgba(255, 255, 255, 0.8), inset 0 2px 4px rgba(255,255,255,0.${Math.min(8, carLevel - 6)})`
-              : carLevel >= 6
-              ? `0 0 ${15 + carLevel * 2}px rgba(255, 255, 255, 0.6), inset 0 2px 4px rgba(255,255,255,0.4)`
-              : carLevel >= 4
-              ? `0 0 ${10 + carLevel * 2}px rgba(255, 255, 255, 0.4), inset 0 2px 4px rgba(255,255,255,0.3)`
-              : carLevel >= 2
-              ? '0 0 15px #fbbf24, inset 0 2px 4px rgba(255,255,255,0.2)'
-              : `0 0 15px ${selectedCar.color === 'cyan' ? '#06b6d4' : selectedCar.color === 'purple' ? '#8b5cf6' : selectedCar.color === 'yellow' ? '#f59e0b' : selectedCar.color === 'blue' ? '#3b82f6' : selectedCar.color === 'red' ? '#ef4444' : '#374151'}, inset 0 2px 4px rgba(255,255,255,0.2)`,
-            filter: carLevel >= 8 ? `brightness(${1.3 + (carLevel - 8) * 0.1}) saturate(${0.8 + (carLevel - 8) * 0.05})` : 
-                     carLevel >= 6 ? 'brightness(1.2) saturate(0.9)' :
-                     carLevel >= 4 ? 'brightness(1.1) saturate(0.95)' :
-                     carLevel >= 2 ? 'brightness(1.05)' : 'none'
+            // Fixed simple shadow - no dynamic changes
+            boxShadow: '0 0 8px rgba(255, 255, 255, 0.5)',
           }}
         >
-          {/* Front Windshield */}
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-3/4 h-1/3 bg-gradient-to-b from-white/30 to-white/10 border-b border-white/20" 
-               style={{ borderRadius: '8px 8px 0 0' }} />
+          {/* Simple windshield */}
+          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-3/4 h-1/3 bg-white/20 rounded-t-lg" />
           
-          {/* Front Grille */}
-          <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-1/2 h-1 bg-black/80" 
-               style={{ borderRadius: '0 0 4px 4px' }}>
-            <div className="w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-          </div>
+          {/* Simple headlights */}
+          <div className="absolute top-0.5 left-1 w-1.5 h-1 bg-white rounded-full" />
+          <div className="absolute top-0.5 right-1 w-1.5 h-1 bg-white rounded-full" />
           
-          {/* Headlights */}
-          <div className="absolute top-0.5 left-1 w-1.5 h-1 bg-white rounded-full shadow-sm">
-            <div className="w-full h-full bg-gradient-to-br from-white to-blue-200 rounded-full animate-pulse" />
-          </div>
-          <div className="absolute top-0.5 right-1 w-1.5 h-1 bg-white rounded-full shadow-sm">
-            <div className="w-full h-full bg-gradient-to-bl from-white to-blue-200 rounded-full animate-pulse" />
-          </div>
+          {/* Simple racing stripe - no conditional logic */}
+          <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 w-0.5 h-1/2 bg-white/70 rounded-full" />
           
-          {/* Side Vents/Air Intakes */}
-          <div className="absolute top-1/3 left-0 w-1 h-1/3 bg-black/40" style={{ borderRadius: '0 4px 4px 0' }}>
-            <div className="w-full h-full bg-gradient-to-r from-black/60 to-transparent" />
-          </div>
-          <div className="absolute top-1/3 right-0 w-1 h-1/3 bg-black/40" style={{ borderRadius: '4px 0 0 4px' }}>
-            <div className="w-full h-full bg-gradient-to-l from-black/60 to-transparent" />
-          </div>
-          
-          {/* Central Racing Stripe */}
-          <div className={`absolute top-1/4 left-1/2 transform -translate-x-1/2 w-0.5 h-1/2 ${
-            carLevel >= 8 ? 'bg-white/90' : 
-            carLevel >= 6 ? 'bg-white/80' : 
-            carLevel >= 4 ? 'bg-yellow-400/80' : 
-            carLevel >= 2 ? 'bg-white/60' : 'bg-white/30'
-          } rounded-full transition-all duration-700`} />
-          
-          {/* Side Racing Stripes (Level 6+) */}
-          {carLevel >= 6 && (
-            <>
-              <div className={`absolute top-1/4 left-1/4 w-0.5 h-1/2 ${
-                carLevel >= 8 ? 'bg-white/80' : 'bg-yellow-400/60'
-              } rounded-full transition-all duration-700`} />
-              <div className={`absolute top-1/4 right-1/4 w-0.5 h-1/2 ${
-                carLevel >= 8 ? 'bg-white/80' : 'bg-yellow-400/60'
-              } rounded-full transition-all duration-700`} />
-            </>
-          )}
-          
-          {/* Additional racing stripes for high levels (Level 10+) */}
-          {carLevel >= 10 && (
-            <>
-              <div className="absolute top-1/6 left-1/3 w-0.25 h-2/3 bg-white/70 rounded-full" />
-              <div className="absolute top-1/6 right-1/3 w-0.25 h-2/3 bg-white/70 rounded-full" />
-            </>
-          )}
-          
-          {/* Rear Spoiler (Level 4+) */}
-          {carUpgrades.wings && (
-            <div className={`absolute -bottom-0.5 left-1/2 transform -translate-x-1/2 w-3/4 h-0.5 ${
-              carLevel >= 8 ? 'bg-gradient-to-r from-white/80 via-white/90 to-white/80' :
-              carLevel >= 6 ? 'bg-gradient-to-r from-cyan-400/80 via-cyan-500/90 to-cyan-400/80' :
-              'bg-gradient-to-r from-black/60 via-black/80 to-black/60'
-            } rounded-sm shadow-sm transition-all duration-700`} />
-          )}
-          
-          {/* Tail Lights */}
-          <div className={`absolute bottom-0.5 left-1 w-1 h-0.5 rounded-sm ${
-            carLevel >= 8 ? 'bg-white' : 
-            carLevel >= 6 ? 'bg-cyan-400' : 
-            carLevel >= 4 ? 'bg-yellow-400' : 
-            'bg-red-500'
-          } shadow-sm transition-all duration-700`}>
-            <div className={`w-full h-full bg-gradient-to-r ${
-              carLevel >= 8 ? 'from-white to-cyan-200' : 
-              carLevel >= 6 ? 'from-cyan-300 to-cyan-500' : 
-              carLevel >= 4 ? 'from-yellow-300 to-yellow-500' : 
-              'from-red-400 to-red-600'
-            } rounded-sm animate-pulse`} />
-          </div>
-          <div className={`absolute bottom-0.5 right-1 w-1 h-0.5 rounded-sm ${
-            carLevel >= 8 ? 'bg-white' : 
-            carLevel >= 6 ? 'bg-cyan-400' : 
-            carLevel >= 4 ? 'bg-yellow-400' : 
-            'bg-red-500'
-          } shadow-sm transition-all duration-700`}>
-            <div className={`w-full h-full bg-gradient-to-l ${
-              carLevel >= 8 ? 'from-white to-cyan-200' : 
-              carLevel >= 6 ? 'from-cyan-300 to-cyan-500' : 
-              carLevel >= 4 ? 'from-yellow-300 to-yellow-500' : 
-              'from-red-400 to-red-600'
-            } rounded-sm animate-pulse`} />
-          </div>
-          
-          {/* Exhaust Flames (Boost Effect) */}
-          {carUpgrades.boost && (
-            <>
-              <div className="absolute -bottom-1 left-1/4 w-0.5 h-2 bg-gradient-to-t from-blue-400 via-cyan-400 to-transparent rounded-b opacity-80 animate-pulse" />
-              <div className="absolute -bottom-1 right-1/4 w-0.5 h-2 bg-gradient-to-t from-orange-400 via-yellow-400 to-transparent rounded-b opacity-80 animate-pulse" />
-            </>
-          )}
-          
-          {/* Carbon Fiber Effect (Level 4+) */}
-          {carLevel >= 4 && (
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/10 to-black/20 opacity-60 transition-all duration-700" 
-                 style={{
-                   backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 1px, rgba(0,0,0,0.1) 1px, rgba(0,0,0,0.1) 2px)',
-                   clipPath: 'polygon(20% 0%, 80% 0%, 100% 30%, 100% 100%, 0% 100%, 0% 30%)',
-                   borderRadius: '12px 12px 6px 6px'
-                 }} />
-          )}
-          
-          {/* God mode effects (Level 8+) */}
-          {carLevel >= 8 && (
-            <>
-              <div className={`absolute inset-0 ${
-                carLevel >= 12 ? 'bg-gradient-to-r from-white/40 via-cyan-500/40 to-white/40' :
-                carLevel >= 10 ? 'bg-gradient-to-r from-cyan-500/30 via-white/30 to-cyan-500/30' :
-                'bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-purple-500/30'
-              } rounded-lg animate-pulse transition-all duration-1000`} />
-              <div className={`absolute -inset-1 ${
-                carLevel >= 12 ? 'bg-gradient-to-r from-white via-cyan-400 to-white' :
-                carLevel >= 10 ? 'bg-gradient-to-r from-cyan-400 via-white to-cyan-400' :
-                'bg-gradient-to-r from-purple-400 via-yellow-400 to-purple-400'
-              } rounded-lg opacity-20 animate-spin transition-all duration-1000`} style={{ animationDuration: '3s' }} />
-            </>
-          )}
-          
-          {/* Ultimate god mode lightning effect (Level 12+) */}
-          {carLevel >= 12 && (
-            <div className="absolute inset-0 overflow-hidden rounded-lg">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" 
-                   style={{ 
-                     background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%)',
-                     animation: 'lightning 0.8s infinite'
-                   }} />
-            </div>
-          )}
+          {/* Simple tail lights - no conditional logic */}
+          <div className="absolute bottom-0.5 left-1 w-1 h-0.5 rounded-sm bg-red-500" />
+          <div className="absolute bottom-0.5 right-1 w-1 h-0.5 rounded-sm bg-red-500" />
         </div>
-        
-        {/* Aerodynamic Wings (Level 4+) */}
-        {carUpgrades.wings && (
-          <>
-            <div className={`absolute top-1/3 -left-1 w-1.5 h-0.5 ${
-              carLevel >= 8 ? 'bg-gradient-to-r from-white/90 to-transparent' :
-              carLevel >= 6 ? 'bg-gradient-to-r from-cyan-400/80 to-transparent' :
-              'bg-gradient-to-r from-black/80 to-transparent'
-            } rounded-r transform rotate-12 shadow-sm transition-all duration-700`} />
-            <div className={`absolute top-1/3 -right-1 w-1.5 h-0.5 ${
-              carLevel >= 8 ? 'bg-gradient-to-l from-white/90 to-transparent' :
-              carLevel >= 6 ? 'bg-gradient-to-l from-cyan-400/80 to-transparent' :
-              'bg-gradient-to-l from-black/80 to-transparent'
-            } rounded-l transform -rotate-12 shadow-sm transition-all duration-700`} />
-          </>
-        )}
-      </motion.div>
+      </div>
 
-      {/* Enhanced particle effects */}
-      <ParticleSystem particles={particles.map(p => ({ ...p, type: 'sparkle' }))} />
-
-      {/* Simple particle effects for backwards compatibility */}
+      {/* Simple particle effects - removed complex systems */}
       {particles.map(particle => (
-        <motion.div
+        <div
           key={particle.id}
-          className="absolute w-2 h-2 bg-white rounded-full"
+          className="absolute w-2 h-2 bg-white rounded-full opacity-80"
           style={{
             left: `${particle.x}%`,
             top: `${particle.y}%`,
           }}
-          initial={{ opacity: 1, scale: 1 }}
-          animate={{ opacity: 0, scale: 0, y: -20 }}
-          transition={{ duration: 0.5 }}
         />
       ))}
 
-      {/* Mobile touch controls indicator */}
-      <div className="absolute bottom-4 left-0 right-0 md:hidden">
-        <div className="flex justify-center space-x-4">
-          <div className="bg-black/30 backdrop-blur-lg rounded-lg p-4 text-center">
-            <div className="text-cyan-400 text-sm mb-1">👈 TAP LEFT</div>
-            <div className="text-xs text-gray-400">Steer Left</div>
+      {/* Mobile-first touch controls - Always visible on mobile */}
+      <div className="absolute bottom-2 left-0 right-0 lg:hidden" style={{ zIndex: 90 }}>
+        <div className="flex justify-center space-x-2 px-4">
+          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-3 text-center border border-cyan-400/30">
+            <div className="text-cyan-400 text-sm font-bold mb-1">👈 TRÁI</div>
+            <div className="text-xs text-gray-300">Chạm bên trái</div>
           </div>
-          <div className="bg-black/30 backdrop-blur-lg rounded-lg p-4 text-center">
-            <div className="text-cyan-400 text-sm mb-1">TAP RIGHT 👉</div>
-            <div className="text-xs text-gray-400">Steer Right</div>
+          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-3 text-center border border-cyan-400/30">
+            <div className="text-cyan-400 text-sm font-bold mb-1">PHẢI 👉</div>
+            <div className="text-xs text-gray-300">Chạm bên phải</div>
           </div>
         </div>
-        <div className="flex justify-center mt-2">
-          <div className="bg-black/30 backdrop-blur-lg rounded-lg p-3 text-center">
-            <div className="text-purple-400 text-xs mb-1">📱 TILT PHONE</div>
-            <div className="text-xs text-gray-400">Left/Right to Steer</div>
+        <div className="flex justify-center mt-2 px-4">
+          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-2 text-center border border-purple-400/30">
+            <div className="text-purple-400 text-xs font-bold mb-1">📱 NGHIÊNG ĐIỆN THOẠI</div>
+            <div className="text-xs text-gray-300">Trái/Phải để điều khiển</div>
           </div>
         </div>
       </div>
 
-      {/* Speed lines */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(10)].map((_, i) => (
-          <motion.div
+      {/* Desktop controls hint */}
+      <div className="absolute bottom-4 left-0 right-0 hidden lg:block" style={{ zIndex: 90 }}>
+        <div className="flex justify-center">
+          <div className="bg-black/30 backdrop-blur-lg rounded-lg p-3 text-center">
+            <div className="text-cyan-400 text-sm mb-1">← / → Arrow Keys</div>
+            <div className="text-xs text-gray-400">Use arrow keys to steer</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile-responsive speed lines */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 10 }}>
+        {[...Array(4)].map((_, i) => (
+          <div
             key={i}
-            className="absolute w-0.5 h-20 bg-gradient-to-b from-transparent via-cyan-400 to-transparent opacity-40"
+            className="absolute w-0.5 sm:w-1 h-16 sm:h-20 bg-gradient-to-b from-transparent via-cyan-400 to-transparent opacity-30"
             style={{
-              left: `${20 + i * 8}%`,
-            }}
-            animate={{
-              y: ['-100px', '100vh'],
-            }}
-            transition={{
-              duration: 1 / speed,
-              repeat: Infinity,
-              ease: 'linear',
-              delay: i * 0.1,
+              left: `${25 + i * 16}%`, // More spaced out for mobile
+              animation: `speedLine ${2 / speed}s linear infinite`,
+              animationDelay: `${i * 0.3}s`,
             }}
           />
         ))}
       </div>
 
-      {/* Answer Boxes for Language Learning */}
-      {answerBoxes.map(box => (
-        <AnswerBox
-          key={box.id}
-          id={box.id}
-          x={box.x}
-          y={box.y}
-          width={box.width}
-          height={box.height}
-          isCorrect={box.isCorrect}
-          answer={box.answer}
-          lane={box.lane}
-          color={box.color}
-        />
-      ))}
+      {/* Answer Boxes for Language Learning - ensure high z-index */}
+      <div style={{ zIndex: 80 }}>
+        {answerBoxes.map(box => (
+          <AnswerBox
+            key={box.id}
+            id={box.id}
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            isCorrect={box.isCorrect}
+            answer={box.answer}
+            lane={box.lane}
+            color={box.color}
+          />
+        ))}
+      </div>
+
+      {/* Mystery Boxes - Special collectible items */}
+      <div style={{ zIndex: 85 }}>
+        {mysteryBoxes.map(box => (
+          <MysteryBox
+            key={box.id}
+            x={box.x}
+            y={box.y}
+            type={box.type}
+            onCollect={() => {
+              // Remove collected mystery box
+              setMysteryBoxes(prev => prev.filter(b => b.id !== box.id))
+              
+              // Award points based on rarity
+              const points = {
+                common: 50,
+                rare: 100,
+                epic: 200,
+                legendary: 500
+              }[box.type]
+              
+              setScore(prev => prev + points)
+              
+              // Visual feedback - create sparkle effect
+              const newParticles = Array.from({length: 10}, (_, i) => ({
+                id: `sparkle-${Date.now()}-${i}`,
+                x: box.x,
+                y: box.y,
+                vx: (Math.random() - 0.5) * 5,
+                vy: (Math.random() - 0.5) * 5
+              }))
+              setParticles(prev => [...prev, ...newParticles])
+            }}
+          />
+        ))}
+      </div>
     </div>
     
     {/* Language Learning Component */}
