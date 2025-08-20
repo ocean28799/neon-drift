@@ -60,6 +60,29 @@ export default function ModernStreakCounter({
     return 'rgba(239, 68, 68, 0.8)'
   }
 
+  const getNextMilestone = () => {
+    return streakMilestones.find(m => m > streak) || null
+  }
+
+  const getProgressToNext = () => {
+    const nextMilestone = getNextMilestone()
+    if (!nextMilestone) return 100
+    
+    const prevMilestone = streakMilestones.reverse().find(m => m <= streak) || 0
+    streakMilestones.reverse() // restore original order
+    
+    const progress = ((streak - prevMilestone) / (nextMilestone - prevMilestone)) * 100
+    return Math.min(100, Math.max(0, progress))
+  }
+
+  const getStreakMultiplier = () => {
+    if (streak >= 50) return 3.0
+    if (streak >= 25) return 2.5
+    if (streak >= 10) return 2.0
+    if (streak >= 5) return 1.5
+    return 1.0
+  }
+
   const StreakIcon = getStreakIcon()
 
   if (!isVisible || streak === 0) return null
@@ -101,7 +124,7 @@ export default function ModernStreakCounter({
               ease: "easeInOut"
             }}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <motion.div
                 animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
@@ -109,7 +132,7 @@ export default function ModernStreakCounter({
                 <StreakIcon className="w-8 h-8 text-white drop-shadow-lg" />
               </motion.div>
               
-              <div className="text-center">
+              <div className="text-center flex-1">
                 <motion.div 
                   className="text-3xl font-bold text-white drop-shadow-lg"
                   animate={{ 
@@ -127,7 +150,44 @@ export default function ModernStreakCounter({
                 <div className="text-sm font-semibold text-white/90 drop-shadow">
                   STREAK
                 </div>
+
+                {/* Multiplier Display */}
+                <motion.div 
+                  className="text-xs font-bold text-yellow-300 drop-shadow mt-1"
+                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                >
+                  {getStreakMultiplier()}x BONUS
+                </motion.div>
               </div>
+
+              {/* Progress to Next Milestone */}
+              {getNextMilestone() && (
+                <div className="text-center">
+                  <div className="text-xs text-white/80 mb-1">NEXT</div>
+                  <motion.div 
+                    className="w-12 h-12 rounded-full border-2 border-white/30 relative overflow-hidden"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  >
+                    {/* Progress circle */}
+                    <div className="absolute inset-0">
+                      <motion.div
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                          background: `conic-gradient(from 0deg, ${getStreakGlow()} 0%, ${getStreakGlow()} ${getProgressToNext()}%, transparent ${getProgressToNext()}%, transparent 100%)`
+                        }}
+                      />
+                      <div className="absolute inset-1 bg-black/60 rounded-full flex items-center justify-center">
+                        <span className="text-xs font-bold text-white">{getNextMilestone()}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                  <div className="text-xs text-white/60 mt-1">
+                    {Math.round(getProgressToNext())}%
+                  </div>
+                </div>
+              )}
               
               <motion.div
                 animate={{ rotate: [0, -10, 10, 0] }}
