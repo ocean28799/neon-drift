@@ -2,7 +2,7 @@ class DynamicMusicEngine {
   private audioContext: AudioContext | null = null
   private masterGain: GainNode | null = null
   private baseTrack: AudioBufferSourceNode | null = null
-  private layerTracks: Map<string, AudioBufferSourceNode> = new Map()
+  private layerTracks: Map<string, GainNode> = new Map()
   private currentIntensity = 0.5
   private targetIntensity = 0.5
   private isPlaying = false
@@ -11,7 +11,7 @@ class DynamicMusicEngine {
     if (typeof window === 'undefined') return
 
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       this.masterGain = this.audioContext.createGain()
       this.masterGain.connect(this.audioContext.destination)
       
@@ -65,7 +65,7 @@ class DynamicMusicEngine {
     gainNode.connect(this.masterGain)
 
     // Store for intensity control
-    this.layerTracks.set(name, gainNode as any)
+    this.layerTracks.set(name, gainNode as GainNode)
   }
 
   setIntensity(intensity: number) {
@@ -81,7 +81,7 @@ class DynamicMusicEngine {
     this.currentIntensity += (this.targetIntensity - this.currentIntensity) * smoothingFactor
 
     // Update each layer based on intensity
-    this.layerTracks.forEach((gainNode: any, layerName) => {
+    this.layerTracks.forEach((gainNode: GainNode, layerName) => {
       const layerThresholds = {
         base: 0.0,
         drums: 0.25,
@@ -107,9 +107,10 @@ class DynamicMusicEngine {
     this.isPlaying = true
     
     // Start all oscillators
-    this.layerTracks.forEach((node: any) => {
-      if (node.start) {
-        node.start()
+    this.layerTracks.forEach((node: GainNode) => {
+      if (node.gain) {
+        // GainNode doesn't have start() method, but we can adjust volume
+        node.gain.value = 0.3
       }
     })
 
@@ -128,9 +129,9 @@ class DynamicMusicEngine {
 
     this.isPlaying = false
     
-    this.layerTracks.forEach((node: any) => {
-      if (node.stop) {
-        node.stop()
+    this.layerTracks.forEach((node: GainNode) => {
+      if (node.disconnect) {
+        node.disconnect()
       }
     })
     
