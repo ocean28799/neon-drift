@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useState } from 'react'
 
 interface AnswerBoxProps {
   id: string
@@ -22,6 +23,7 @@ export default function AnswerBox({
   isCorrect,
   answer
 }: AnswerBoxProps) {
+  const [isHovered, setIsHovered] = useState(false)
   // Determine background color based on correctness
   const getBackgroundColor = () => {
     if (isCorrect) {
@@ -71,6 +73,8 @@ export default function AnswerBox({
         rotateY: 5,
         transition: { duration: 0.2 }
       }}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
     >
       {/* Outer glow effect */}
       <div 
@@ -132,6 +136,56 @@ export default function AnswerBox({
             </div>
           </div>
         </div>
+
+        {/* Hover Preview Effect */}
+        {isHovered && (
+          <motion.div
+            className="absolute -top-8 left-1/2 transform -translate-x-1/2 pointer-events-none"
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className={`px-3 py-1 rounded-full text-xs font-bold text-white backdrop-blur-sm ${
+              isCorrect 
+                ? 'bg-green-500/90 shadow-[0_0_15px_rgba(34,197,94,0.6)]' 
+                : 'bg-red-500/90 shadow-[0_0_15px_rgba(239,68,68,0.6)]'
+            }`}>
+              {isCorrect ? '✓ CORRECT CHOICE' : '✗ INCORRECT CHOICE'}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Enhanced Hover Particles */}
+        {isHovered && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+            {[...Array(6)].map((_, i) => (
+              <motion.div
+                key={i}
+                className={`absolute w-1 h-1 rounded-full ${
+                  isCorrect ? 'bg-green-300' : 'bg-red-300'
+                }`}
+                initial={{
+                  x: '50%',
+                  y: '50%',
+                  scale: 0,
+                  opacity: 0
+                }}
+                animate={{
+                  x: `${50 + (Math.random() - 0.5) * 100}%`,
+                  y: `${50 + (Math.random() - 0.5) * 100}%`,
+                  scale: [0, 1, 0],
+                  opacity: [0, 1, 0]
+                }}
+                transition={{
+                  duration: 1.5,
+                  delay: i * 0.1,
+                  ease: "easeOut"
+                }}
+              />
+            ))}
+          </div>
+        )}
         
         {/* Correct answer special effects */}
         {isCorrect && (

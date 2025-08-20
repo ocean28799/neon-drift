@@ -43,6 +43,7 @@ export default function ModernAnswerBox({
 }: ModernAnswerBoxProps) {
   const [isAnswered, setIsAnswered] = React.useState(false)
   const [showFeedback, setShowFeedback] = React.useState(false)
+  const [showPreview, setShowPreview] = React.useState(false)
 
   const handleClick = () => {
     if (isAnswered || !isActive) return
@@ -54,6 +55,21 @@ export default function ModernAnswerBox({
     setTimeout(() => {
       onAnswer(isCorrect)
     }, 500)
+  }
+
+  const handleHover = () => {
+    if (!isAnswered && isActive) {
+      setShowPreview(true)
+      
+      // Auto-hide preview after 2 seconds
+      setTimeout(() => {
+        setShowPreview(false)
+      }, 2000)
+    }
+  }
+
+  const handleHoverEnd = () => {
+    setShowPreview(false)
   }
 
   const PowerUpIcon = isPowerUp ? powerUpIcons[powerUpType] : null
@@ -98,6 +114,8 @@ export default function ModernAnswerBox({
         transition: { duration: 0.2 }
       }}
       whileTap={{ scale: isActive ? 0.95 : 0.8 }}
+      onHoverStart={handleHover}
+      onHoverEnd={handleHoverEnd}
     >
       <motion.button
         onClick={handleClick}
@@ -193,6 +211,59 @@ export default function ModernAnswerBox({
         {/* Difficulty indicator */}
         {!isPowerUp && (
           <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full bg-gradient-to-r ${gradientColor}`} />
+        )}
+
+        {/* Enhanced Preview Effect */}
+        {showPreview && !isAnswered && (
+          <motion.div
+            className="absolute inset-0 rounded-2xl pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Preview glow */}
+            <motion.div
+              className="absolute inset-0 rounded-2xl"
+              animate={{
+                boxShadow: isCorrect
+                  ? [
+                      "0 0 0px rgba(34, 197, 94, 0.4)",
+                      "0 0 30px rgba(34, 197, 94, 0.8)",
+                      "0 0 0px rgba(34, 197, 94, 0.4)"
+                    ]
+                  : [
+                      "0 0 0px rgba(239, 68, 68, 0.4)",
+                      "0 0 30px rgba(239, 68, 68, 0.8)",
+                      "0 0 0px rgba(239, 68, 68, 0.4)"
+                    ]
+              }}
+              transition={{ duration: 1, repeat: Infinity }}
+            />
+
+            {/* Confidence indicator */}
+            <motion.div
+              className="absolute -top-8 left-1/2 transform -translate-x-1/2"
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className={`px-3 py-2 rounded-lg font-bold text-sm text-white backdrop-blur-sm ${
+                isCorrect 
+                  ? 'bg-green-500/90 shadow-[0_0_20px_rgba(34,197,94,0.6)]' 
+                  : 'bg-red-500/90 shadow-[0_0_20px_rgba(239,68,68,0.6)]'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <span>{isCorrect ? '✓' : '✗'}</span>
+                  <span>{isCorrect ? 'GOOD CHOICE!' : 'THINK AGAIN!'}</span>
+                </div>
+                <div className="text-xs opacity-80 mt-1">
+                  {isCorrect ? 'This will boost your streak!' : 'This will break your streak!'}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </motion.button>
 
